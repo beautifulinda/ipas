@@ -218,7 +218,11 @@ function goSibling(step: number) {
 
 function onKeydown(event: KeyboardEvent) {
   const target = event.target
-  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return
+  // 在輸入框或面板（data-no-map-keys）裡按鍵時，不切換地圖
+  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"], [data-no-map-keys]')) {
+    // Esc 例外：在面板裡按 Esc 一樣回到上一層（關閉面板）
+    if (event.key !== 'Escape' || !target.closest('[data-no-map-keys]')) return
+  }
 
   if (event.key === 'Escape') {
     goUp()
@@ -363,8 +367,11 @@ onBeforeUnmount(() => {
               <path v-for="run in houseSprite(town.id === focusId)" :key="run.color" :fill="run.color" :d="run.d" />
             </g>
             <!-- 目前選到的城鎮上方有一個上下跳動的箭頭 -->
-            <g v-if="town.id === focusId" class="marker" :transform="`translate(0, ${-SPRITE_SIZE.house.h - 1})`">
-              <path v-for="run in markerSprite" :key="run.color" :fill="run.color" :d="run.d" />
+            <!-- 外層負責定位、內層負責跳動：CSS 動畫的 transform 會蓋掉 SVG 的 transform 屬性 -->
+            <g v-if="town.id === focusId" :transform="`translate(0, ${-SPRITE_SIZE.house.h})`">
+              <g class="marker">
+                <path v-for="run in markerSprite" :key="run.color" :fill="run.color" :d="run.d" />
+              </g>
             </g>
           </g>
         </g>

@@ -42,7 +42,7 @@
 1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。尚未建立遠端 repo、尚未 push。
 2. ✅ 讀取 `data/map.sample.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
 3. 手機版：返回按鈕、右滑手勢、bottom sheet、觸控目標 44px（地圖本身已可在手機上逐層放大）。
-4. 概念卡片與練習題作答、作答紀錄存 IndexedDB、匯出匯入。
+4. ✅ 概念卡片與練習題作答、作答紀錄存 IndexedDB（`composables/useRecords.ts`）、錯題本、匯出匯入（格式與合併邏輯在 `utils/progress.ts`）。
 5. CI：JSON 格式與 `reviewed` 檢查、Vitest 單元測試、Playwright 手機與桌面尺寸測試。
 
 第一階段目標是「地圖能操作、網址能打開」，題目數量、Supabase、贊助連結都延後。
