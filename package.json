@@ -7,6 +7,7 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "start": "nuxt generate && rm -rf .output/preview && mkdir -p .output/preview && cp -R .output/public .output/preview/ipas && npx serve -l 4173 --no-clipboard .output/preview",
     "postinstall": "nuxt prepare",
     "typecheck": "vue-tsc --noEmit",
     "validate": "node scripts/validate-data.mjs",

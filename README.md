@@ -155,8 +155,11 @@ npm run typecheck  # 型別檢查（vue-tsc）
 npm run validate   # 題庫檢查
 npm run review     # 逐題審核練習題草稿
 npm run generate   # 產生靜態網站
+npm start          # 產生靜態網站並在 http://localhost:4173/ipas/ 預覽
 # npm run test     # 單元測試（Vitest，尚未建立）
 ```
+
+本機的 `npm start` 與 `npm run dev` 會載入 `data/private/` 的官方公告試題（若檔案存在），公開部署的網站不含這些題目。
 
 ## 授權
 
