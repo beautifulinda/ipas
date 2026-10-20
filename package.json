@@ -8,7 +8,9 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "validate": "node scripts/validate-data.mjs",
+    "review": "node scripts/review.mjs"
   },
   "dependencies": {
     "@vueuse/core": "^15.0.0",

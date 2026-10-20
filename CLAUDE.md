@@ -20,7 +20,7 @@
   - 版面（海岸線、地區切割、城鎮與山林位置）由 `utils/islandLayout.ts` 以 ID 為種子產生，3D 場景在 `utils/scene/`。
   - 文字標籤是疊在畫面上的 HTML，圓角樣式、以看得清楚為優先，每格畫面重新排版避免重疊。
   - 成就感（`utils/progression.ts`）：城鎮依熟練度從工地 → 帳篷 → 房子 → 城堡；沒練習過的地區蓋白霧與雲；地區內有題目的概念全是城堡就插旗；島上全部插旗則燈塔亮起；達成時放煙火並跳出解鎖訊息。
-  - 「掌握」的定義：該概念所有題目的最近一次作答都答對。沒有題目的概念不計入里程碑。
+  - 「掌握」的定義：該概念所有題目的最近一次作答都答對。沒有題目的概念視為未完成（題庫補齊前，該地區不會插旗、島不會亮燈）。
   - 面積目前依概念數量分配；是否改依考古題比重尚未決定。
   - 不支援 WebGL 時自動改用清單模式；系統開啟減少動態效果時關閉海浪、煙火與鏡頭飛行。
   - 其他嘗試過的版本保留在分支：`pixel-style`（像素風 SVG）、`island-natural-style`、`treemap-layout`、`circle-pack-layout`。
@@ -38,13 +38,15 @@
 - 不轉載官方樣題、考題全文或他人撰寫的解析；官方內容只放連結。
 - 題目為自行撰寫，可用 LLM 產生草稿，人工審核後才把 `reviewed` 設為 `true`。CI 必須擋下 `reviewed: false` 的題目。
 - 每題標註 `source.type`（`original` 或 `official-link`）。
-- 科目與分類名稱依官方最新評鑑範圍，範例資料中標 `TODO` 的部分待作者確認，不要自行補上猜測內容。
+- 科目、分類、概念依官方〈AI 應用規劃師能力鑑定 評鑑內容範圍參考〉115.02 更新版（作者 2026-10-20 確認採用）：分類＝評鑑主題（如 L113），概念＝評鑑內容（如 L11302），ID 直接用官方代碼，來源記在 `data/map.json` 的 `scopeSource`。官方改版時以新版為準，不要自行補上猜測內容。
+- 題目流程：草稿放 `data/drafts/questions.draft.json`（網站不讀取，`reviewed: false`）→ 作者用 `npm run review` 逐題作答並審核 → 通過的題目移到 `data/map.json` 並設為 `reviewed: true`。`npm run validate` 會擋下正式題庫中未審核的題目。
+- 概念說明（summary、keyPoints）由 Claude 依官方範圍撰寫，作者可直接修改。
 - 介面文字、README、註解一律使用正體中文。
 
 ## 目前進度與下一步（Phase 1）
 
 1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。尚未建立遠端 repo、尚未 push。
-2. ✅ 讀取 `data/map.sample.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
+2. ✅ 讀取 `data/map.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
 3. ✅ 手機版：返回按鈕、bottom sheet（可拖曳展開／收起／關閉）、全螢幕作答、觸控目標 44px、清單模式。
    - 右滑手勢靠瀏覽器歷史紀錄實現：地圖位置同步到網址 `?at=節點ID`（`composables/useFocusHistory.ts`），iPhone 左緣右滑、Android 返回鍵都會回上一層。
    - 必須透過 vue-router（頁面在 `pages/index.vue`），不可直接呼叫 `history.pushState`：Nuxt 的簡易路由在有 baseURL 時處理上一頁會把網址疊成 `/ipas/ipas/`。

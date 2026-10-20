@@ -16,9 +16,9 @@ export interface Progression {
   townLevels: Map<string, TownLevel>
   // 地區有任何一題作答過，雲霧就散開
   exploredRegions: Set<string>
-  // 地區裡有題目的概念全部升到城堡，插上旗子
+  // 地區裡的概念全部升到城堡，插上旗子
   flaggedRegions: Set<string>
-  // 島上有題目的地區全部插旗，燈塔亮起
+  // 島上的地區全部插旗，燈塔亮起
   litIslands: Set<string>
 }
 
@@ -38,11 +38,10 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
   }
 
   for (const subject of map.subjects) {
-    let islandHasGoal = false
-    let islandComplete = true
+    // 沒有題目的概念無法升級，視為尚未完成：題庫還沒補齊的地區不會插旗，島也不會亮燈
+    let islandComplete = subject.categories.length > 0
     for (const category of subject.categories) {
-      let regionHasGoal = false
-      let regionComplete = true
+      let regionComplete = category.concepts.length > 0
       for (const concept of category.concepts) {
         const questions = practiceQuestions(concept)
         const answered = questions.filter((q) => latest.has(q.id))
@@ -54,19 +53,12 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
         result.townLevels.set(concept.id, level)
 
         if (answered.length) result.exploredRegions.add(category.id)
-        // 沒有題目的概念不算進里程碑，免得永遠無法完成
-        if (questions.length) {
-          regionHasGoal = true
-          if (level < 3) regionComplete = false
-        }
+        if (level < 3) regionComplete = false
       }
-      if (regionHasGoal) {
-        islandHasGoal = true
-        if (regionComplete) result.flaggedRegions.add(category.id)
-        else islandComplete = false
-      }
+      if (regionComplete) result.flaggedRegions.add(category.id)
+      else islandComplete = false
     }
-    if (islandHasGoal && islandComplete) result.litIslands.add(subject.id)
+    if (islandComplete) result.litIslands.add(subject.id)
   }
   return result
 }

@@ -102,7 +102,14 @@
 
 ## 資料結構
 
-完整範例見 [`data/map.sample.json`](data/map.sample.json)，型別定義見 [`types/map.ts`](types/map.ts)。
+題庫在 [`data/map.json`](data/map.json)，型別定義見 [`types/map.ts`](types/map.ts)。科目、分類與概念依官方〈AI 應用規劃師能力鑑定 評鑑內容範圍參考〉（115.02 更新），ID 直接使用官方代碼（如 `L11302`）。
+
+### 題目審核流程
+
+1. 練習題草稿放在 `data/drafts/questions.draft.json`，網站不會讀取。
+2. 執行 `npm run review`（或 `npm run review -- L113` 只審某一部分），逐題先作答、再看答案與解析，決定通過或標記待修改。
+3. 通過的題目會移到 `data/map.json` 並標記 `reviewed: true`。
+4. 執行 `npm run validate` 檢查格式；正式題庫中若有未審核的題目，檢查會失敗。
 
 ```
 Subject（科目）
@@ -145,6 +152,8 @@ Subject（科目）
 npm install
 npm run dev        # 開發伺服器
 npm run typecheck  # 型別檢查（vue-tsc）
+npm run validate   # 題庫檢查
+npm run review     # 逐題審核練習題草稿
 npm run generate   # 產生靜態網站
 # npm run test     # 單元測試（Vitest，尚未建立）
 ```

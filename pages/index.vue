@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core'
 import type { TopicMap } from '~/types/map'
-import mapData from '~/data/map.sample.json'
+import mapData from '~/data/map.json'
 import { findConcept } from '~/utils/concepts'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
 import { TOWN_LEVEL_NAMES, computeProgression, newMilestones, type Milestone } from '~/utils/progression'

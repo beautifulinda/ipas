@@ -46,9 +46,15 @@ export interface Subject {
   categories: Category[]
 }
 
+export interface ScopeSource {
+  title: string
+  url: string
+}
+
 export interface TopicMap {
   version: string
   updatedAt: string // ISO 8601 日期
   disclaimer: string
+  scopeSource?: ScopeSource // 科目與分類依據的官方文件
   subjects: Subject[]
 }
