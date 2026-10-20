@@ -1,9 +1,11 @@
 // 題庫檢查：格式、ID 不重複、答案在選項中，並擋下還沒人工審核（reviewed: false）的題目
 // 用法：npm run validate（CI 也會執行，有錯誤時以非 0 結束）
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const MAP_FILE = 'data/map.json'
 const DRAFT_FILE = 'data/drafts/questions.draft.json'
+// 本機才有的官方公告試題（不進 git）；存在時一併檢查
+const PRIVATE_FILE = 'data/private/past-papers.json'
 const errors = []
 const fail = (where, message) => errors.push(`${where}：${message}`)
 const isText = (value) => typeof value === 'string' && value.trim().length > 0
@@ -20,9 +22,13 @@ function checkQuestion(q, where, { requireReviewed }) {
     if (new Set(q.options.map((o) => o.text)).size !== q.options.length) fail(where, '選項內容重複')
     if (!ids.includes(q.answer)) fail(where, `答案 ${q.answer} 不在選項中`)
   }
-  if (!isText(q.explanation)) fail(where, '缺少解析')
+  // 公告試題沒有官方解析，允許留空；自己寫的題目一定要有解析
+  if (q.source?.type !== 'official-past' && !isText(q.explanation)) fail(where, '缺少解析')
   if (![1, 2, 3].includes(q.difficulty)) fail(where, '難度必須是 1、2 或 3')
-  if (!['original', 'official-link'].includes(q.source?.type)) fail(where, 'source.type 必須是 original 或 official-link')
+  if (!['original', 'official-link', 'official-past'].includes(q.source?.type)) {
+    fail(where, 'source.type 必須是 original、official-link 或 official-past')
+  }
+  if (q.source?.type === 'official-past' && !isText(q.source.exam)) fail(where, 'official-past 題目必須註明場次與題號（exam）')
   if (q.source?.type === 'official-link' && !isText(q.source.url)) fail(where, 'official-link 題目必須附上官方網址')
   if (typeof q.reviewed !== 'boolean') fail(where, 'reviewed 必須是 true 或 false')
   else if (requireReviewed && !q.reviewed) fail(where, '尚未人工審核（reviewed: false），不可放進正式題庫')
@@ -83,10 +89,24 @@ if (draftFile) {
   }
 }
 
+// 官方公告試題只能放在 data/private/，不可出現在正式題庫或草稿
+for (const [id, where] of seen) {
+  if (id?.startsWith('past-') && !where.startsWith(PRIVATE_FILE)) fail(where, '官方公告試題不可放進會進 git 的檔案')
+}
+if (existsSync(PRIVATE_FILE)) {
+  const privateFile = readJson(PRIVATE_FILE)
+  for (const item of privateFile?.questions ?? []) {
+    const where = `${PRIVATE_FILE} ${item.question?.id}`
+    if (!seen.has(item.conceptId)) fail(where, `所屬概念 ${item.conceptId || '（未設定）'} 不存在`)
+    unique(item.question?.id, where)
+    checkQuestion(item.question ?? {}, where, { requireReviewed: true })
+  }
+}
+
 if (errors.length) {
   console.error(`題庫檢查失敗，共 ${errors.length} 個問題：`)
   for (const error of errors) console.error(`- ${error}`)
   process.exit(1)
 }
-const count = [...seen.keys()].filter((id) => id.startsWith('q-')).length
-console.log(`題庫檢查通過（題目與草稿共 ${count} 題）。`)
+const count = [...seen.keys()].filter((id) => id?.startsWith('q-') || id?.startsWith('past-')).length
+console.log(`題庫檢查通過（正式題目、草稿與本機考古題共 ${count} 題）。`)

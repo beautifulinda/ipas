@@ -3,10 +3,19 @@ import { useElementSize } from '@vueuse/core'
 import type { TopicMap } from '~/types/map'
 import mapData from '~/data/map.json'
 import { findConcept } from '~/utils/concepts'
+import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
 import { TOWN_LEVEL_NAMES, computeProgression, newMilestones, type Milestone } from '~/utils/progression'
 
-const map = mapData as TopicMap
+// 官方公告試題只放在本機的 data/private/（不進 git、不公開部署）；檔案不存在時就只用正式題庫
+const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('/data/private/past-papers.json', {
+  eager: true,
+  import: 'default',
+})
+const map = withExtraQuestions(
+  mapData as TopicMap,
+  Object.values(privateBanks).flatMap((bank) => bank.questions),
+)
 const tree = toMapTree(map)
 
 const focusId = ref(ROOT_ID)

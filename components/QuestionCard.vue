@@ -23,6 +23,7 @@ function optionState(id: string) {
 
 <template>
   <div class="question">
+    <p v-if="question.source.type === 'official-past'" class="badge">考古題・{{ question.source.exam }}</p>
     <p class="stem">{{ question.stem }}</p>
     <div class="options" role="group" aria-label="選項">
       <button
@@ -44,15 +45,30 @@ function optionState(id: string) {
 
     <div v-else class="feedback" :class="correct ? 'is-correct' : 'is-wrong'" role="status">
       <p class="verdict">{{ correct ? '答對了！' : `答錯了，正確答案是 ${question.answer}。` }}</p>
-      <p class="explanation">{{ question.explanation }}</p>
+      <p v-if="question.explanation" class="explanation">{{ question.explanation }}</p>
+      <p v-else class="explanation muted">公告試題未附解析。</p>
       <p v-if="question.source.type === 'official-link' && question.source.url" class="source">
         出處：<a :href="question.source.url" target="_blank" rel="noopener">官方資料</a>
+      </p>
+      <p v-if="question.source.type === 'official-past'" class="source">
+        出處：iPAS 公告試題 {{ question.source.exam }}
       </p>
     </div>
   </div>
 </template>
 
 <style scoped>
+.badge {
+  display: inline-block;
+  margin: 0 0 0.4rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: #fff1c2;
+  color: #7a5a12;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .stem {
   margin: 0 0 0.75rem;
   font-weight: 600;
@@ -152,5 +168,11 @@ function optionState(id: string) {
 
 .verdict {
   font-weight: 800;
+}
+
+.muted,
+.source {
+  color: #64748b;
+  font-size: 0.9rem;
 }
 </style>

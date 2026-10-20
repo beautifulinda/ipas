@@ -9,3 +9,6 @@ dist
 .env.*
 .DS_Store
 *.log
+
+# 官方考古題只供本機練習，不可進 git 或公開部署
+data/private/

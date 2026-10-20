@@ -6,8 +6,10 @@ export interface QuestionOption {
 }
 
 export interface QuestionSource {
-  type: 'original' | 'official-link'
+  // official-past：官方公告試題，只放在 data/private/ 供本機練習，不可進 git 或公開部署
+  type: 'original' | 'official-link' | 'official-past'
   url?: string // type 為 official-link 時必填
+  exam?: string // type 為 official-past 時填入場次與題號，例如「115-S3 第一科 第 1 題」
   note?: string
 }
 
