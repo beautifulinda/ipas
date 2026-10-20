@@ -20,6 +20,7 @@ const emit = defineEmits<{ navigate: [id: string] }>()
 ol {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.25rem;
   margin: 0;
   padding: 0;
@@ -44,6 +45,13 @@ button {
 button:hover,
 button:focus-visible {
   text-decoration: underline;
+}
+
+/* 觸控裝置：麵包屑的按鈕加高到 44px */
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
 }
 
 [aria-current] {

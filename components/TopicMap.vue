@@ -9,7 +9,8 @@ import type { MapNode } from '~/utils/mapTree'
 import { OUTLINE, PIXEL_THEMES, PX, SPRITE_SIZE, rasterizeWorld, snap, sprite, type PixelTheme } from '~/utils/pixelArt'
 import { fitLines } from '~/utils/textFit'
 
-const props = defineProps<{ tree: MapNode }>()
+// insetBottom：畫面底部被其他元素（手機的 bottom sheet）擋住的高度，聚焦時改對準上方可見範圍
+const props = withDefaults(defineProps<{ tree: MapNode; insetBottom?: number }>(), { insetBottom: 0 })
 const focusId = defineModel<string>('focusId', { required: true })
 
 // 字級單位為螢幕 px，畫的時候除以縮放倍率，放大縮小時字都維持同樣大小
@@ -183,11 +184,12 @@ function zoomToFocus(animate: boolean) {
   const bh = Math.max(box[3] - box[1], 1)
   // 上方保留島名的高度（兩行），島名不會被切掉
   const labelSpace = ISLAND_FONT * 4
-  const scale = Math.min(width.value / bw, (height.value - labelSpace) / bh) / FIT_MARGIN
+  const visibleHeight = Math.max(height.value - props.insetBottom, height.value * 0.3)
+  const scale = Math.min(width.value / bw, (visibleHeight - labelSpace) / bh) / FIT_MARGIN
   const target = zoomIdentity
     .translate(
       width.value / 2 - scale * (box[0] + bw / 2),
-      (height.value + labelSpace) / 2 - scale * (box[1] + bh / 2),
+      (visibleHeight + labelSpace) / 2 - scale * (box[1] + bh / 2),
     )
     .scale(scale)
   const svg = select(svgEl.value)
@@ -241,6 +243,10 @@ function onKeydown(event: KeyboardEvent) {
 
 watch(focusNode, () => zoomToFocus(true))
 watch([width, height], () => zoomToFocus(false))
+watch(
+  () => props.insetBottom,
+  () => zoomToFocus(true),
+)
 
 onMounted(() => {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
@@ -355,12 +361,13 @@ onBeforeUnmount(() => {
           @keydown.space.prevent="activate(town.id)"
         >
           <title>{{ town.data.title }}</title>
+          <!-- 點擊範圍比房子大一圈，且在螢幕上至少 44px，手指才點得到 -->
           <rect
             class="town-hit"
-            :x="town.x - HOUSE_HALF - PX"
-            :y="town.y - HOUSE_HEIGHT - PX"
-            :width="HOUSE_HALF * 2 + PX * 2"
-            :height="HOUSE_HEIGHT + PX * 2"
+            :x="town.x - Math.max(HOUSE_HALF + PX, 22 / k)"
+            :y="town.y - HOUSE_HEIGHT / 2 - Math.max(HOUSE_HEIGHT / 2 + PX, 22 / k)"
+            :width="Math.max(HOUSE_HALF + PX, 22 / k) * 2"
+            :height="Math.max(HOUSE_HEIGHT / 2 + PX, 22 / k) * 2"
           />
           <g class="pixels" :transform="`translate(${town.x}, ${town.y}) scale(${PX})`">
             <g class="house">

@@ -41,7 +41,10 @@
 
 1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。尚未建立遠端 repo、尚未 push。
 2. ✅ 讀取 `data/map.sample.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
-3. 手機版：返回按鈕、右滑手勢、bottom sheet、觸控目標 44px（地圖本身已可在手機上逐層放大）。
+3. ✅ 手機版：返回按鈕、bottom sheet（可拖曳展開／收起／關閉）、全螢幕作答、觸控目標 44px、清單模式。
+   - 右滑手勢靠瀏覽器歷史紀錄實現：地圖位置同步到網址 `?at=節點ID`（`composables/useFocusHistory.ts`），iPhone 左緣右滑、Android 返回鍵都會回上一層。
+   - 必須透過 vue-router（頁面在 `pages/index.vue`），不可直接呼叫 `history.pushState`：Nuxt 的簡易路由在有 baseURL 時處理上一頁會把網址疊成 `/ipas/ipas/`。
+   - 裝置判斷在掛載後才生效（`composables/useDevice.ts`），避免靜態 HTML 與 hydration 不一致。
 4. ✅ 概念卡片與練習題作答、作答紀錄存 IndexedDB（`composables/useRecords.ts`）、錯題本、匯出匯入（格式與合併邏輯在 `utils/progress.ts`）。
 5. CI：JSON 格式與 `reviewed` 檢查、Vitest 單元測試、Playwright 手機與桌面尺寸測試。
 
