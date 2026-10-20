@@ -10,17 +10,21 @@
 
 ## 已確定的決策
 
-- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 SVG 與 D3（d3-zoom、d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
+- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 Three.js（3D 低多邊形，2026-10-20 由作者決定從 SVG 改為 3D），版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap、polygon-clipping；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
 - TypeScript 固定 5.9：7.x 與 vue-tsc 不相容。型別檢查用 `npm run typecheck`。
 - 部署：`nuxt generate` 產生靜態網站，GitHub Actions 部署到 GitHub Pages。
 - 子路徑部署：`nuxt.config.ts` 必須設定 `app.baseURL: '/ipas/'`，否則上線後靜態資源路徑錯誤。
 - 資料：題庫與地圖結構集中在 `data/` 的 JSON，型別定義在 `types/map.ts`。三層結構為 科目 → 大知識分類 → 主題概念（`questions` 可為空陣列）。
-- 地圖設計（2026-10-20 定案）：像素風的斜俯視島嶼地圖。
-  - 科目＝島、大知識分類＝島上地區、主題概念＝城鎮（房子）。
-  - 地形逐格像素化（`utils/pixelArt.ts`），山、山丘、樹、房子是像素圖案；文字標籤刻意用圓角平滑樣式，以看得清楚為優先，統一排版、互不重疊。
-  - 島的形狀、地區切割、裝飾位置以 ID 為種子產生（`utils/islandLayout.ts`），每次相同。
+- 地圖設計（2026-10-20 定案）：3D 低多邊形島嶼地圖（`components/IslandMap3D.vue`）。
+  - 科目＝島、大知識分類＝島上地區（高低不同的草地台階）、主題概念＝城鎮。
+  - 版面（海岸線、地區切割、城鎮與山林位置）由 `utils/islandLayout.ts` 以 ID 為種子產生，3D 場景在 `utils/scene/`。
+  - 文字標籤是疊在畫面上的 HTML，圓角樣式、以看得清楚為優先，每格畫面重新排版避免重疊。
+  - 成就感（`utils/progression.ts`）：城鎮依熟練度從工地 → 帳篷 → 房子 → 城堡；沒練習過的地區蓋白霧與雲；地區內有題目的概念全是城堡就插旗；島上全部插旗則燈塔亮起；達成時放煙火並跳出解鎖訊息。
+  - 「掌握」的定義：該概念所有題目的最近一次作答都答對。沒有題目的概念不計入里程碑。
   - 面積目前依概念數量分配；是否改依考古題比重尚未決定。
-  - 其他嘗試過的版本保留在分支：`island-natural-style`（自然風島嶼）、`treemap-layout`（長方形）、`circle-pack-layout`（巢狀圓形）。
+  - 不支援 WebGL 時自動改用清單模式；系統開啟減少動態效果時關閉海浪、煙火與鏡頭飛行。
+  - 其他嘗試過的版本保留在分支：`pixel-style`（像素風 SVG）、`island-natural-style`、`treemap-layout`、`circle-pack-layout`。
+  - web3：2026-10-20 作者詢問，評估後目前不納入規劃（與隱私原則衝突、對備考沒有幫助）；作者尚未做最終決定。
 - 裝置分流：
   - 桌面：整張地圖縮放與拖曳、右側面板、鍵盤操作（Esc 返回、方向鍵切換同層）。
   - 手機：同一張島嶼地圖，點擊逐層放大（一次聚焦一層）、返回按鈕與右滑手勢、bottom sheet、全螢幕作答、觸控目標至少 44px。直式螢幕時島改為上下排列。

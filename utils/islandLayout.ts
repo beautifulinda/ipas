@@ -36,6 +36,8 @@ export interface RegionShape {
   // 地區範圍（平面座標）
   polygon: Point[]
   label: Point
+  // 地區名稱位置（平面座標）
+  labelFlat: Point
   color: number
 }
 
@@ -47,6 +49,8 @@ export interface TownShape {
   data: MapNode
   x: number
   y: number
+  // 城鎮位置（平面座標）
+  flat: Point
 }
 
 // 島上的裝飾：樹（圓樹、針葉樹）、山丘與山，只用來美化，不能點
@@ -56,6 +60,8 @@ export interface DecorShape {
   x: number
   y: number
   size: number
+  // 位置（平面座標）
+  flat: Point
 }
 
 export interface WorldLayout {
@@ -235,13 +241,9 @@ function scatterDecor(
   for (let i = 0, attempt = 0; i < bigCount && attempt < 200; attempt++) {
     // 每座島至少一座大山
     const kind = i === 0 || random() < 0.5 ? 'mountain' : 'hill'
-    const candidate: DecorShape = {
-      islandId,
-      kind,
-      x: center[0] + (random() - 0.5) * 1.4 * radius,
-      y: center[1] + (random() - 0.5) * 1.4 * radius,
-      size: decorSize(kind),
-    }
+    const x = center[0] + (random() - 0.5) * 1.4 * radius
+    const y = center[1] + (random() - 0.5) * 1.4 * radius
+    const candidate: DecorShape = { islandId, kind, x, y, size: decorSize(kind), flat: [x, y] }
     if (fits(candidate)) {
       placed.push(candidate)
       i++
@@ -267,13 +269,9 @@ function scatterDecor(
     const count = 4 + Math.floor(random() * 5)
     for (let i = 0, attempt = 0; i < count && attempt < count * 8; attempt++) {
       const kind = random() < 0.45 ? 'pine' : 'tree'
-      const candidate: DecorShape = {
-        islandId,
-        kind,
-        x: cx + gaussian(random) * 18,
-        y: cy + gaussian(random) * 18,
-        size: decorSize(kind),
-      }
+      const x = cx + gaussian(random) * 18
+      const y = cy + gaussian(random) * 18
+      const candidate: DecorShape = { islandId, kind, x, y, size: decorSize(kind), flat: [x, y] }
       if (fits(candidate)) {
         placed.push(candidate)
         i++
@@ -285,7 +283,7 @@ function scatterDecor(
   return placed
     .map((d) => {
       const [x, y] = top([d.x, d.y])
-      return { ...d, x: snap(x), y: snap(y) }
+      return { ...d, x: snap(x), y: snap(y), flat: [d.x, d.y] as Point }
     })
     .sort((a, b) => a.y - b.y)
 }
@@ -397,6 +395,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
         path: polygonPath(polygon.map(top)),
         polygon,
         label: top(labelPoint),
+        labelFlat: labelPoint,
         color: regionIndex,
       })
       world.bounds.set(category.data.id, intersect(bboxOf(polygon.map(top)), islandBox))
@@ -413,6 +412,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
           data: concept.data,
           x: snap(tx),
           y: snap(ty),
+          flat: townPoint,
         })
         world.bounds.set(concept.data.id, intersect(bboxOf(cell.map(top)), islandBox))
       }

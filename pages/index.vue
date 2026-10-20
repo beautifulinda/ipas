@@ -4,6 +4,7 @@ import type { TopicMap } from '~/types/map'
 import mapData from '~/data/map.sample.json'
 import { findConcept } from '~/utils/concepts'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
+import { TOWN_LEVEL_NAMES, computeProgression, newMilestones, type Milestone } from '~/utils/progression'
 
 const map = mapData as TopicMap
 const tree = toMapTree(map)
@@ -14,7 +15,7 @@ const path = computed(() => findPath(tree, focusId.value))
 const concept = computed(() => findConcept(map, focusId.value))
 
 const { isMobile } = useDevice()
-const { attempts, record } = useRecords()
+const { attempts, ready, record } = useRecords()
 useFocusHistory(focusId, tree)
 
 // 地圖／清單模式，選擇記在瀏覽器
@@ -32,6 +33,43 @@ const insetBottom = computed(() => (isMobile.value && concept.value ? mainHeight
 const quizOpen = ref(false)
 watch(concept, () => {
   quizOpen.value = false
+})
+
+// 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出
+const progression = computed(() => computeProgression(map, attempts.value))
+const mapRef = ref<{ celebrate: (milestones: Milestone[]) => void }>()
+
+// 達成里程碑時放煙火並跳出解鎖訊息；剛載入紀錄時不算
+interface Toast {
+  id: number
+  text: string
+}
+const toasts = ref<Toast[]>([])
+let toastId = 0
+const MILESTONE_TEXT: Record<Milestone['kind'], (title: string) => string> = {
+  castle: (title) => `🏰 ${title} 升級為${TOWN_LEVEL_NAMES[3]}！`,
+  flag: (title) => `🚩 ${title} 全部掌握，插上旗子！`,
+  lighthouse: (title) => `🗼 ${title} 的燈塔亮起來了！`,
+}
+// 紀錄載入完成後的下一輪才開始偵測，載入舊紀錄造成的變化不算「剛達成」
+let armed = false
+watch(
+  ready,
+  (value) => {
+    if (value) nextTick(() => (armed = true))
+  },
+  { immediate: true },
+)
+watch(progression, (after, before) => {
+  if (!armed || !before) return
+  const milestones = newMilestones(map, before, after)
+  if (!milestones.length) return
+  mapRef.value?.celebrate(milestones)
+  for (const milestone of milestones) {
+    const id = ++toastId
+    toasts.value.push({ id, text: MILESTONE_TEXT[milestone.kind](milestone.title) })
+    setTimeout(() => (toasts.value = toasts.value.filter((t) => t.id !== id)), 4500)
+  }
 })
 
 function goUp() {
@@ -64,7 +102,15 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
     <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile }">
       <div class="map-area">
-        <TopicMap v-if="view === 'map'" v-model:focus-id="focusId" :tree="tree" :inset-bottom="insetBottom" />
+        <IslandMap3D
+          v-if="view === 'map'"
+          ref="mapRef"
+          v-model:focus-id="focusId"
+          :tree="tree"
+          :progression="progression"
+          :inset-bottom="insetBottom"
+          @unsupported="view = 'list'"
+        />
         <ListView v-else :map="map" :focus-id="focusId" :attempts="attempts" @navigate="focusId = $event" />
         <!-- 手機：左上角的返回按鈕（也可以用系統的返回手勢） -->
         <button
@@ -104,6 +150,11 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       @close="quizOpen = false"
       @answered="onAnswered"
     />
+
+    <!-- 里程碑解鎖訊息 -->
+    <div class="toasts" role="status" aria-live="polite">
+      <p v-for="toast in toasts" :key="toast.id" class="toast">{{ toast.text }}</p>
+    </div>
 
     <footer class="hint">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
@@ -217,6 +268,42 @@ body {
   font-size: 1.4rem;
   font-weight: 800;
   cursor: pointer;
+}
+
+.toasts {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  gap: 0.5rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  margin: 0;
+  padding: 0.6rem 1.2rem;
+  border: 3px solid #2b2633;
+  border-radius: 999px;
+  background: #ffe9a8;
+  box-shadow: 0 4px 0 rgba(43, 38, 51, 0.35);
+  font-weight: 800;
+  white-space: nowrap;
+  animation: pop 0.35s ease-out;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
 
 .hint {
