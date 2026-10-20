@@ -10,13 +10,20 @@
 
 ## 已確定的決策
 
-- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 SVG 與 D3（d3-zoom、d3-hierarchy）；裝置判斷用 VueUse `useMediaQuery`。
+- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 SVG 與 D3（d3-zoom、d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
+- TypeScript 固定 5.9：7.x 與 vue-tsc 不相容。型別檢查用 `npm run typecheck`。
 - 部署：`nuxt generate` 產生靜態網站，GitHub Actions 部署到 GitHub Pages。
 - 子路徑部署：`nuxt.config.ts` 必須設定 `app.baseURL: '/ipas/'`，否則上線後靜態資源路徑錯誤。
 - 資料：題庫與地圖結構集中在 `data/` 的 JSON，型別定義在 `types/map.ts`。三層結構為 科目 → 大知識分類 → 主題概念（`questions` 可為空陣列）。
+- 地圖設計（2026-10-20 定案）：像素風的斜俯視島嶼地圖。
+  - 科目＝島、大知識分類＝島上地區、主題概念＝城鎮（房子）。
+  - 地形逐格像素化（`utils/pixelArt.ts`），山、山丘、樹、房子是像素圖案；文字標籤刻意用圓角平滑樣式，以看得清楚為優先，統一排版、互不重疊。
+  - 島的形狀、地區切割、裝飾位置以 ID 為種子產生（`utils/islandLayout.ts`），每次相同。
+  - 面積目前依概念數量分配；是否改依考古題比重尚未決定。
+  - 其他嘗試過的版本保留在分支：`island-natural-style`（自然風島嶼）、`treemap-layout`（長方形）、`circle-pack-layout`（巢狀圓形）。
 - 裝置分流：
   - 桌面：整張地圖縮放與拖曳、右側面板、鍵盤操作（Esc 返回、方向鍵切換同層）。
-  - 手機：一次一層的鑽取式瀏覽、返回按鈕與右滑手勢、bottom sheet、全螢幕作答、觸控目標至少 44px。
+  - 手機：同一張島嶼地圖，點擊逐層放大（一次聚焦一層）、返回按鈕與右滑手勢、bottom sheet、全螢幕作答、觸控目標至少 44px。直式螢幕時島改為上下排列。
   - 判斷同時參考寬度與 `pointer: coarse`，並提供清單模式。
 - 隱私：本機優先（local-first）。錯題本、作答紀錄、學習進度只存在使用者瀏覽器（IndexedDB），提供 JSON 匯出、匯入。不做登入，不收集個人資料。
 - Supabase（Phase 2）只存匿名答題統計（題目 ID 與對錯）與題目回報。前端只用 anon key；匿名資料表 RLS 設為只能新增、不能讀取原始資料，統計透過彙總 view 或資料庫函式取得，並加寫入頻率限制。
@@ -32,9 +39,9 @@
 
 ## 目前進度與下一步（Phase 1）
 
-1. 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。
-2. 讀取 `data/map.sample.json`，完成桌面版地圖的點擊縮放與麵包屑。
-3. 完成手機版逐層鑽取與 bottom sheet。
+1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。尚未建立遠端 repo、尚未 push。
+2. ✅ 讀取 `data/map.sample.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
+3. 手機版：返回按鈕、右滑手勢、bottom sheet、觸控目標 44px（地圖本身已可在手機上逐層放大）。
 4. 概念卡片與練習題作答、作答紀錄存 IndexedDB、匯出匯入。
 5. CI：JSON 格式與 `reviewed` 檢查、Vitest 單元測試、Playwright 手機與桌面尺寸測試。
 
