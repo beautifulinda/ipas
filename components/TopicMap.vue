@@ -1,62 +1,151 @@
 <script setup lang="ts">
-import { hierarchy, pack, type HierarchyCircularNode } from 'd3-hierarchy'
+import { useElementSize } from '@vueuse/core'
+import { hierarchy, treemap, type HierarchyNode } from 'd3-hierarchy'
 import { select } from 'd3-selection'
-import 'd3-transition'
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import type { MapNode } from '~/utils/mapTree'
+import { fitLines } from '~/utils/textFit'
 
-type PackedNode = HierarchyCircularNode<MapNode>
+// 畫面上的一個方塊；rel 是相對於聚焦節點的層數（1 為下一層）
+interface Tile {
+  id: string
+  data: MapNode
+  rel: number
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+  opacity: number
+}
 
 const props = defineProps<{ tree: MapNode }>()
 const focusId = defineModel<string>('focusId', { required: true })
 
-// SVG 內部座標固定為 SIZE × SIZE，實際大小由 viewBox 縮放
-const SIZE = 1000
-// 聚焦時圓外保留的邊距比例
-const FIT_MARGIN = 1.1
-const LABEL_SIZE = 24
+// 以下尺寸單位皆為 px（viewBox 與容器大小一致）
+const HEADER = 32
+const GAP = 4
+const HEADER_FONT = 15
+const TILE_FONT = 14
+const LINE_HEIGHT = 1.35
+const DURATION = 500
 
-const root = computed<PackedNode>(() =>
-  pack<MapNode>()
-    .size([SIZE, SIZE])
-    .padding((node) => (node.depth === 0 ? 24 : 12))(
-      hierarchy(props.tree).sum((node) => (node.children?.length ? 0 : 1)),
-    ),
-)
-
-const nodes = computed(() => root.value.descendants().filter((node) => node.depth > 0))
-
-const focusNode = computed(
-  () => root.value.descendants().find((node) => node.data.id === focusId.value) ?? root.value,
-)
-
-// 只標示聚焦節點的下一層；聚焦在最底層時標示自己
-const labelNodes = computed(() => focusNode.value.children ?? [focusNode.value])
-
+const wrapperEl = ref<HTMLDivElement>()
 const svgEl = ref<SVGSVGElement>()
+const { width, height } = useElementSize(wrapperEl)
+
+// 完整的樹，用來找父節點與同層節點
+const root = computed(() => hierarchy(props.tree))
+const focusNode = computed(
+  () => root.value.find((node) => node.data.id === focusId.value) ?? root.value,
+)
+
+// 只把聚焦節點的子樹排滿整個畫面，顯示往下兩層；面積依底下的概念數量分配
+function layout(focus: HierarchyNode<MapNode>, w: number, h: number): Tile[] {
+  const sub = treemap<MapNode>()
+    .size([w, h])
+    .paddingOuter(GAP)
+    .paddingInner(GAP)
+    .paddingTop((node) => (node.depth === 1 && node.children ? HEADER : GAP))
+    .round(true)(hierarchy(focus.data).sum((node) => (node.children?.length ? 0 : 1)))
+
+  // 聚焦在最底層時，畫出它自己
+  const visible = sub.children
+    ? sub.descendants().filter((node) => node.depth >= 1 && node.depth <= 2)
+    : [sub]
+  return visible.map((node) => ({
+    id: node.data.id,
+    data: node.data,
+    rel: node.depth,
+    x0: node.x0,
+    y0: node.y0,
+    x1: node.x1,
+    y1: node.y1,
+    opacity: 1,
+  }))
+}
+
+const tiles = ref<Tile[]>([])
+let frame = 0
+
+function easeInOut(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+}
+
+function lerp(from: number, to: number, t: number) {
+  return from + (to - from) * t
+}
+
+// 已在畫面上的方塊從原位置移動到新位置，新出現的方塊淡入
+function render(animate: boolean) {
+  if (!width.value || !height.value) return
+  const target = layout(focusNode.value, width.value, height.value)
+  const previous = new Map(tiles.value.map((tile) => [tile.id, tile]))
+  cancelAnimationFrame(frame)
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!animate || reduceMotion) {
+    tiles.value = target
+    return
+  }
+
+  const start = performance.now()
+  const step = (now: number) => {
+    const t = easeInOut(Math.min(1, (now - start) / DURATION))
+    tiles.value = target.map((tile) => {
+      const from = previous.get(tile.id)
+      if (!from) return { ...tile, opacity: t }
+      return {
+        ...tile,
+        x0: lerp(from.x0, tile.x0, t),
+        y0: lerp(from.y0, tile.y0, t),
+        x1: lerp(from.x1, tile.x1, t),
+        y1: lerp(from.y1, tile.y1, t),
+        opacity: lerp(from.opacity, 1, t),
+      }
+    })
+    if (t < 1) frame = requestAnimationFrame(step)
+  }
+  frame = requestAnimationFrame(step)
+}
+
+function hasHeader(tile: Tile) {
+  return tile.rel === 1 && !!tile.data.children?.length
+}
+
+function isPassive(tile: Tile) {
+  return tile.rel > 1
+}
+
+function headerLabel(tile: Tile) {
+  return fitLines(tile.data.title, (tile.x1 - tile.x0 - 16) / HEADER_FONT, 1)[0]
+}
+
+// 方塊中央的多行標籤，回傳每一行的文字與 y 座標
+function centerLabel(tile: Tile) {
+  const lineHeight = TILE_FONT * LINE_HEIGHT
+  const maxLines = Math.floor((tile.y1 - tile.y0 - 8) / lineHeight)
+  const lines = fitLines(tile.data.title, (tile.x1 - tile.x0 - 12) / TILE_FONT, maxLines)
+  const midY = (tile.y0 + tile.y1) / 2
+  return lines.map((text, index) => ({
+    text,
+    y: midY + (index - (lines.length - 1) / 2) * lineHeight,
+  }))
+}
+
 const transform = ref(zoomIdentity)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 
-function zoomTo(node: PackedNode, animate: boolean) {
-  if (!svgEl.value || !zoomBehavior) return
-  const k = SIZE / (node.r * 2 * FIT_MARGIN)
-  const target = zoomIdentity.translate(SIZE / 2 - k * node.x, SIZE / 2 - k * node.y).scale(k)
-  const svg = select(svgEl.value)
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (animate && !reduceMotion) {
-    svg.transition().duration(600).call(zoomBehavior.transform, target)
-  } else {
-    svg.call(zoomBehavior.transform, target)
-  }
+function resetZoom() {
+  if (svgEl.value && zoomBehavior) select(svgEl.value).call(zoomBehavior.transform, zoomIdentity)
 }
 
-function activate(node: PackedNode) {
-  focusId.value = node.data.id
+function activate(id: string) {
+  focusId.value = id
 }
 
 function goUp() {
   const parent = focusNode.value.parent
-  if (parent) activate(parent)
+  if (parent) activate(parent.data.id)
 }
 
 // 方向鍵在同層節點間切換，到頭尾時循環
@@ -64,15 +153,7 @@ function goSibling(step: number) {
   const siblings = focusNode.value.parent?.children
   if (!siblings || siblings.length < 2) return
   const index = siblings.indexOf(focusNode.value)
-  activate(siblings[(index + step + siblings.length) % siblings.length])
-}
-
-// 鍵盤切換聚焦節點後，把 DOM 焦點一起移過去，焦點框才不會留在舊節點上
-async function moveDomFocus() {
-  await nextTick()
-  svgEl.value
-    ?.querySelector<SVGCircleElement>(`[data-id="${CSS.escape(focusNode.value.data.id)}"]`)
-    ?.focus({ preventScroll: true })
+  activate(siblings[(index + step + siblings.length) % siblings.length].data.id)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -90,98 +171,112 @@ function onKeydown(event: KeyboardEvent) {
   } else {
     return
   }
-  moveDomFocus()
+  // 原本有焦點的方塊可能已離開畫面，把焦點交回地圖本身
+  svgEl.value?.focus({ preventScroll: true })
 }
 
-function labelLines(title: string) {
-  // 「科目一：人工智慧基礎概論」這類名稱在冒號後換行
-  const index = title.indexOf('：')
-  return index > 0 ? [title.slice(0, index + 1), title.slice(index + 1)] : [title]
-}
+watch(focusNode, () => {
+  resetZoom()
+  render(true)
+})
 
-// 有子層的節點把標籤放在圓的上緣，避免壓在子節點上；最底層節點置中
-function labelY(node: PackedNode) {
-  if (!node.children) return node.y
-  const lineCount = labelLines(node.data.title).length
-  return node.y - node.r + (LABEL_SIZE * (lineCount * 0.6 + 0.6)) / transform.value.k
-}
-
-watch(focusNode, (node) => zoomTo(node, true))
+watch([width, height], ([w, h]) => {
+  zoomBehavior?.extent([[0, 0], [w, h]]).translateExtent([[0, 0], [w, h]])
+  resetZoom()
+  render(false)
+})
 
 onMounted(() => {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
-    .scaleExtent([0.5, 40])
+    .scaleExtent([1, 8])
     .on('zoom', (event) => {
       transform.value = event.transform
     })
   select(svgEl.value!).call(zoomBehavior).on('dblclick.zoom', null)
-  zoomTo(focusNode.value, false)
   window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
+  cancelAnimationFrame(frame)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
 
 <template>
-  <svg
-    ref="svgEl"
-    class="topic-map"
-    :viewBox="`0 0 ${SIZE} ${SIZE}`"
-    role="group"
-    aria-label="主題地圖"
-    @click="goUp"
-  >
-    <g :transform="transform.toString()">
-      <circle
-        v-for="node in nodes"
-        :key="node.data.id"
-        :data-id="node.data.id"
-        :cx="node.x"
-        :cy="node.y"
-        :r="node.r"
-        :class="[
-          'node',
-          `node--${node.data.level}`,
-          { 'node--focus': node === focusNode, 'node--passive': node.depth > focusNode.depth + 1 },
-        ]"
-        :stroke-width="2 / transform.k"
-        :tabindex="labelNodes.includes(node) ? 0 : -1"
-        :aria-hidden="node.depth > focusNode.depth + 1 ? 'true' : undefined"
-        role="button"
-        :aria-label="node.data.title"
-        @click.stop="activate(node)"
-        @keydown.enter.prevent="activate(node)"
-        @keydown.space.prevent="activate(node)"
-      >
-        <title>{{ node.data.title }}</title>
-      </circle>
-      <text
-        v-for="node in labelNodes"
-        :key="`label-${node.data.id}`"
-        class="label"
-        :x="node.x"
-        :y="labelY(node)"
-        :font-size="LABEL_SIZE / transform.k"
-        :stroke-width="6 / transform.k"
-        text-anchor="middle"
-        dominant-baseline="central"
-      >
-        <tspan
-          v-for="(line, index) in labelLines(node.data.title)"
-          :key="index"
-          :x="node.x"
-          :dy="index === 0 ? `${-(labelLines(node.data.title).length - 1) * 0.6}em` : '1.2em'"
+  <div ref="wrapperEl" class="map-wrapper">
+    <svg
+      ref="svgEl"
+      class="topic-map"
+      :viewBox="`0 0 ${width || 1} ${height || 1}`"
+      role="group"
+      aria-label="主題地圖"
+      tabindex="-1"
+      @click="goUp"
+    >
+      <g :transform="transform.toString()">
+        <g
+          v-for="tile in tiles"
+          :key="tile.id"
+          :opacity="tile.opacity"
+          :class="['tile', `tile--${tile.data.level}`, { 'tile--passive': isPassive(tile) }]"
         >
-          {{ line }}
-        </tspan>
-      </text>
-    </g>
-  </svg>
+          <rect
+            :x="tile.x0"
+            :y="tile.y0"
+            :width="Math.max(0, tile.x1 - tile.x0)"
+            :height="Math.max(0, tile.y1 - tile.y0)"
+            rx="6"
+            :tabindex="isPassive(tile) ? -1 : 0"
+            :role="isPassive(tile) ? undefined : 'button'"
+            :aria-hidden="isPassive(tile) ? 'true' : undefined"
+            :aria-label="tile.data.title"
+            @click.stop="activate(tile.id)"
+            @keydown.enter.prevent="activate(tile.id)"
+            @keydown.space.prevent="activate(tile.id)"
+          >
+            <title>{{ tile.data.title }}</title>
+          </rect>
+          <text
+            v-if="hasHeader(tile)"
+            class="label label--header"
+            :x="tile.x0 + 8"
+            :y="tile.y0 + HEADER / 2 + 1"
+            :font-size="HEADER_FONT"
+            dominant-baseline="central"
+            aria-hidden="true"
+          >
+            {{ headerLabel(tile) }}
+          </text>
+          <text
+            v-else
+            class="label"
+            :font-size="TILE_FONT"
+            text-anchor="middle"
+            dominant-baseline="central"
+            aria-hidden="true"
+          >
+            <tspan
+              v-for="(line, index) in centerLabel(tile)"
+              :key="index"
+              :x="(tile.x0 + tile.x1) / 2"
+              :y="line.y"
+            >
+              {{ line.text }}
+            </tspan>
+          </text>
+        </g>
+      </g>
+    </svg>
+  </div>
 </template>
 
 <style scoped>
+.map-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 .topic-map {
   display: block;
   width: 100%;
@@ -194,53 +289,51 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
-.node {
-  stroke: #94a3b8;
-  cursor: pointer;
-  transition: fill 0.2s;
-}
-
-.node:focus {
+.topic-map:focus {
   outline: none;
 }
 
-/* SVG 圓形用外框線表示鍵盤焦點，取代瀏覽器預設的方形焦點框 */
-.node:hover,
-.node:focus-visible {
-  stroke: #1d4ed8;
-}
-
-.node:focus-visible {
-  stroke-width: 4px;
+rect {
+  stroke: #94a3b8;
+  stroke-width: 1px;
   vector-effect: non-scaling-stroke;
+  cursor: pointer;
 }
 
-.node--subject {
+rect:focus {
+  outline: none;
+}
+
+/* 方塊用外框線表示滑鼠懸停與鍵盤焦點 */
+rect:hover,
+rect:focus-visible {
+  stroke: #1d4ed8;
+  stroke-width: 2px;
+}
+
+.tile--subject rect {
   fill: #e0e7ff;
 }
 
-.node--category {
+.tile--category rect {
   fill: #c7d2fe;
 }
 
-.node--concept {
+.tile--concept rect {
   fill: #fff;
 }
 
-/* 比聚焦層的下一層更深的節點只顯示，點擊交給外層節點，避免一次跳過好幾層 */
-.node--passive {
+/* 比聚焦層的下一層更深的方塊只顯示，點擊交給外層方塊，避免一次跳過好幾層 */
+.tile--passive {
   pointer-events: none;
-}
-
-.node--focus {
-  stroke: #1d4ed8;
 }
 
 .label {
   fill: #1e293b;
-  stroke: #fff;
-  stroke-linejoin: round;
-  paint-order: stroke;
   pointer-events: none;
+}
+
+.label--header {
+  font-weight: 600;
 }
 </style>
