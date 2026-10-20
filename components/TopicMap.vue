@@ -146,7 +146,8 @@ const tags = computed<Tag[]>(() => {
     const box = world.value.bounds.get(region.id)!
     const screenWidth = (box[2] - box[0]) * scale
     if (screenWidth < 70) continue
-    const lines = fitLines(region.data.title, (screenWidth * 0.9) / REGION_FONT, 2)
+    // 標籤在最上層，可以稍微超出地區範圍，避免短名稱被硬拆成兩行
+    const lines = fitLines(region.data.title, (screenWidth * 1.4) / REGION_FONT, 2)
     const [x, y] = region.label
     const step = (REGION_FONT * 2.2) / scale
     place(

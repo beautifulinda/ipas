@@ -71,8 +71,9 @@ export interface WorldLayout {
 
 // 島的面積與底下的概念數量成正比：半徑 = √數量 × ISLAND_UNIT
 const ISLAND_UNIT = 100
-// 島與島之間的海面寬度
+// 島與島之間的海面寬度；直式螢幕縮放倍率小、標籤相對變大，海面要更寬，島名才不會壓到另一座島
 const SEA_GAP = 40
+const SEA_GAP_PORTRAIT = 110
 const COAST_POINTS = 120
 // 斜俯視：垂直方向壓扁成 TILT 倍，島的表面再往上抬 ELEVATION
 export const TILT = 0.62
@@ -188,7 +189,7 @@ function scatterDecor(
   islandId: string,
   coast: Point[],
   center: Point,
-  avoid: Point[],
+  avoid: { labels: Point[]; towns: Point[] },
   random: () => number,
 ): DecorShape[] {
   const inner = coast.map((p): Point => [center[0] + (p[0] - center[0]) * 0.8, center[1] + (p[1] - center[1]) * 0.8])
@@ -213,17 +214,24 @@ function scatterDecor(
     // 城鎮與地區名稱附近留空，房子和文字才看得清楚；標籤畫在最上層，
     // 所以只檢查圖示的底部（貼地的部分），山頂可以從名稱後方長出來
     const base: BBox = [box[0], y - (box[3] - box[1]) * 0.35, box[2], box[3]]
-    const clearOfLabels = avoid.every(([ax, ay]) => !hit(base, [ax - 36, ay - 14, ax + 36, ay + 14]))
+    const clearOfLabels = avoid.labels.every(([ax, ay]) => !hit(base, [ax - 36, ay - 14, ax + 36, ay + 14]))
+    // 房子周圍整塊留空（含房子往上延伸的圖示範圍），山、山丘、樹都不能壓到房子
+    const house = SPRITE_SIZE.house
+    const clearOfTowns = avoid.towns.every(
+      ([ax, ay]) =>
+        !hit(box, [ax - (house.w * PX) / 2 - 8, ay - (house.h * PX) / TILT - 6, ax + (house.w * PX) / 2 + 8, ay + 10]),
+    )
     // 大山、山丘彼此不重疊；樹可以前後交疊成樹林，只要樹幹不擠在一起
     const big = (d: DecorShape) => d.kind === 'mountain' || d.kind === 'hill'
     const clearOfOthers = placed.every((d) =>
       big(d) || big(candidate) ? !hit(box, footprint(d)) : Math.hypot(d.x - x, (d.y - y) * TILT) > (d.size + size) * 0.55,
     )
-    return onLand && clearOfLabels && clearOfOthers
+    return onLand && clearOfLabels && clearOfTowns && clearOfOthers
   }
 
   // 大山與山丘
-  const bigCount = Math.min(4, Math.max(2, Math.round(area / 20000)))
+  // 大山、山丘的數量依島的面積決定，小島只放一座大山，留空間給樹林
+  const bigCount = Math.min(4, Math.max(1, Math.round(area / 22000)))
   for (let i = 0, attempt = 0; i < bigCount && attempt < 200; attempt++) {
     // 每座島至少一座大山
     const kind = i === 0 || random() < 0.5 ? 'mountain' : 'hill'
@@ -320,13 +328,14 @@ function scatterWaves(world: WorldLayout, random: () => number): Point[] {
 export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
   const weight = (node: MapNode) => (node.children?.length ? 0 : 1)
   const subjects = hierarchy(tree).sum(weight).children ?? []
+  const seaGap = portrait ? SEA_GAP_PORTRAIT : SEA_GAP
 
   // 決定每座島的位置：半徑依面積換算，加上海面寬度後互不重疊地排在一起
   const circles = subjects.map((subject) => ({
     subject,
     x: 0,
     y: 0,
-    r: Math.sqrt(subject.value ?? 1) * ISLAND_UNIT + SEA_GAP,
+    r: Math.sqrt(subject.value ?? 1) * ISLAND_UNIT + seaGap,
   }))
   packSiblings(circles)
   if (portrait) {
@@ -337,7 +346,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
 
   circles.forEach(({ subject, x, y, r }, islandIndex) => {
     const random = seededRandom(subject.data.id)
-    const coast = coastline(x, y, r - SEA_GAP, random)
+    const coast = coastline(x, y, r - seaGap, random)
     const topCoast = coast.map(top)
     const baseCoast = coast.map(base)
     const islandBox = bboxOf([...topCoast, ...baseCoast])
@@ -357,7 +366,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
     world.bounds.set(subject.data.id, islandBox)
 
     // 城鎮與地區名稱的位置（平面座標），撒樹林時要避開
-    const avoid: Point[] = []
+    const avoid = { labels: [] as Point[], towns: [] as Point[] }
     // 撒完裝飾後，島的範圍往上延伸到最高的山頂，島名與縮放範圍才不會切到山
     const decorate = () => {
       const decor = scatterDecor(subject.data.id, coast, center, avoid, random)
@@ -380,7 +389,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
     island.children.forEach((category: PolygonNode, regionIndex) => {
       const polygon = category.polygon ?? clip
       const labelPoint = pullInside(polygonCentroid(polygon) as Point, coast, center)
-      avoid.push(labelPoint)
+      avoid.labels.push(labelPoint)
       world.regions.push({
         id: category.data.id,
         islandId: subject.data.id,
@@ -395,7 +404,7 @@ export function buildWorld(tree: MapNode, portrait = false): WorldLayout {
       for (const concept of (category.children ?? []) as PolygonNode[]) {
         const cell = concept.polygon ?? polygon
         const townPoint = pullInside(polygonCentroid(cell) as Point, coast, center)
-        avoid.push(townPoint)
+        avoid.towns.push(townPoint)
         const [tx, ty] = top(townPoint)
         world.towns.push({
           id: concept.data.id,
