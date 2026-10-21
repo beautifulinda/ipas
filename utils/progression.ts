@@ -63,6 +63,17 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
   return result
 }
 
+// 達成里程碑時跳出的訊息
+const MILESTONE_TEXT: Record<Milestone['kind'], (title: string) => string> = {
+  castle: (title) => `🏰 ${title} 升級為${TOWN_LEVEL_NAMES[3]}！`,
+  flag: (title) => `🚩 ${title} 全部掌握，插上旗子！`,
+  lighthouse: (title) => `🗼 ${title} 的燈塔亮起來了！`,
+}
+
+export function milestoneText(milestone: Milestone) {
+  return MILESTONE_TEXT[milestone.kind](milestone.title)
+}
+
 // 比較作答前後，找出這次新達成的里程碑
 export function newMilestones(map: TopicMap, before: Progression, after: Progression): Milestone[] {
   const titles = new Map<string, string>()

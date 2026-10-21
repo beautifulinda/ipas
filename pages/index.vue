@@ -5,7 +5,7 @@ import mapData from '~/data/map.json'
 import { findConcept } from '~/utils/concepts'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
-import { TOWN_LEVEL_NAMES, computeProgression, newMilestones, type Milestone } from '~/utils/progression'
+import { computeProgression, milestoneText, newMilestones, type Milestone } from '~/utils/progression'
 
 // 官方公告試題只放在本機的 data/private/（不進 git、不公開部署）；檔案不存在時就只用正式題庫
 const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('/data/private/past-papers.json', {
@@ -55,11 +55,6 @@ interface Toast {
 }
 const toasts = ref<Toast[]>([])
 let toastId = 0
-const MILESTONE_TEXT: Record<Milestone['kind'], (title: string) => string> = {
-  castle: (title) => `🏰 ${title} 升級為${TOWN_LEVEL_NAMES[3]}！`,
-  flag: (title) => `🚩 ${title} 全部掌握，插上旗子！`,
-  lighthouse: (title) => `🗼 ${title} 的燈塔亮起來了！`,
-}
 // 紀錄載入完成後的下一輪才開始偵測，載入舊紀錄造成的變化不算「剛達成」
 let armed = false
 watch(
@@ -76,7 +71,7 @@ watch(progression, (after, before) => {
   mapRef.value?.celebrate(milestones)
   for (const milestone of milestones) {
     const id = ++toastId
-    toasts.value.push({ id, text: MILESTONE_TEXT[milestone.kind](milestone.title) })
+    toasts.value.push({ id, text: milestoneText(milestone) })
     setTimeout(() => (toasts.value = toasts.value.filter((t) => t.id !== id)), 4500)
   }
 })

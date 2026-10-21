@@ -88,6 +88,20 @@
 - 練習題可由 LLM 產生草稿，但必須經作者逐題審核答案與解析（`npm run review`），CI 會擋下未審核的題目。
 - 涉及授權與法規的判斷（例如官方試題能否公開）不由 AI 推定，而是查證來源並向主辦單位書面確認。
 
+## 測試
+
+功能需求以中文 Gherkin（假設／當／那麼）寫在 [`tests/features/`](tests/features/)，每個功能都包含正常流程與例外流程。需求檔本身就是測試：由 [quickpickle](https://github.com/dnotes/quickpickle) 對應到步驟定義後在 Vitest 執行，需求與程式行為不一致時測試會失敗。
+
+```gherkin
+場景: 城堡的題目後來答錯，降回房子
+  假設 「模型評估」已經是城堡
+  當 我再作答第 2 題並答錯
+  那麼 「模型評估」降回房子
+  而且 不會再放一次煙火
+```
+
+底層的純函式另有單元測試（`tests/unit/`）。CI 在題庫檢查、型別檢查與所有測試都通過後才部署。
+
 ## 系統架構
 
 ```
@@ -167,7 +181,7 @@ npm run validate   # 題庫檢查
 npm run review     # 逐題審核練習題草稿
 npm run generate   # 產生靜態網站
 npm start          # 產生靜態網站並在 http://localhost:4173/ipas/ 預覽
-npm test           # 單元測試（Vitest）
+npm test           # 單元測試與需求測試（Vitest）
 ```
 
 本機的 `npm start` 與 `npm run dev` 會載入 `data/private/` 的官方公告試題（若檔案存在），公開部署的網站不含這些題目。
