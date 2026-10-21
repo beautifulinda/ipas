@@ -14,6 +14,18 @@ Given(/^地區「(.+)」另外有主題「(.+)」，還沒有任何題目$/, (wo
   findRegion(world, region).concepts.push({ ...concept(`K-${title}`), title })
 })
 
+Given(/^地區「(.+)」另外有主題「(.+)」，主題有 (\d+) 題已審核的題目$/, (world: World, region, title, count) => {
+  const id = `K-${title}`
+  const questions = Array.from({ length: Number(count) }, (_, i) => question(`${id}-${i + 1}`))
+  findRegion(world, region).concepts.push({ ...concept(id, questions), title })
+})
+
+Given(/^地區「(.+)」是島「(.+)」上唯一的地區$/, (world: World, region, island) => {
+  const subject = world.map.subjects[0]
+  expect(subject.categories.map((c) => c.title)).toEqual([region])
+  subject.title = island
+})
+
 function answerAll(world: World, title: string) {
   const target = findConcept(world, title)
   answer(world, target, target.questions.filter((q) => q.reviewed).map((_, i) => i + 1), true)
@@ -44,6 +56,16 @@ Then(/^地區「(.+)」的雲霧散開$/, (world: World, region) => {
 
 Then(/^地區「(.+)」不會插旗$/, (world: World, region) => {
   expect(progression(world).flaggedRegions.has(findRegion(world, region).id)).toBe(false)
+})
+
+Then(/^地區「(.+)」插上旗子$/, (world: World, region) => {
+  expect(progression(world).flaggedRegions.has(findRegion(world, region).id)).toBe(true)
+})
+
+Then(/^島「(.+)」的燈塔亮起$/, (world: World, island) => {
+  const subject = world.map.subjects.find((s) => s.title === island)
+  if (!subject) throw new Error(`需求裡沒有島「${island}」`)
+  expect(progression(world).litIslands.has(subject.id)).toBe(true)
 })
 
 // 畫面上的訊息前面有圖示（例如 🏰），比對時略過
