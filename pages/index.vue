@@ -5,7 +5,14 @@ import mapData from '~/data/map.json'
 import { findConcept } from '~/utils/concepts'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
-import { computeProgression, milestoneText, newMilestones, type Milestone } from '~/utils/progression'
+import {
+  computeProgression,
+  isMajorMilestone,
+  milestoneText,
+  newMilestones,
+  recommendedStart,
+  type Milestone,
+} from '~/utils/progression'
 
 // 官方公告試題只放在本機的 data/private/（不進 git、不公開部署）；檔案不存在時就只用正式題庫
 const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('/data/private/past-papers.json', {
@@ -46,14 +53,17 @@ watch(concept, () => {
 
 // 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出
 const progression = computed(() => computeProgression(map, attempts.value))
+// 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
+const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
 const mapRef = ref<{ celebrate: (milestones: Milestone[]) => void }>()
 
-// 達成里程碑時放煙火並跳出解鎖訊息；剛載入紀錄時不算
+// 達成里程碑時放煙火：一般升級跳出恭喜訊息，大事件（城堡、插旗、燈塔）出現里程碑匾額；剛載入紀錄時不算
 interface Toast {
   id: number
   text: string
 }
 const toasts = ref<Toast[]>([])
+const plaques = ref<Toast[]>([])
 let toastId = 0
 // 紀錄載入完成後的下一輪才開始偵測，載入舊紀錄造成的變化不算「剛達成」
 let armed = false
@@ -71,8 +81,9 @@ watch(progression, (after, before) => {
   mapRef.value?.celebrate(milestones)
   for (const milestone of milestones) {
     const id = ++toastId
-    toasts.value.push({ id, text: milestoneText(milestone) })
-    setTimeout(() => (toasts.value = toasts.value.filter((t) => t.id !== id)), 4500)
+    const list = isMajorMilestone(milestone) ? plaques : toasts
+    list.value.push({ id, text: milestoneText(milestone) })
+    setTimeout(() => (list.value = list.value.filter((t) => t.id !== id)), isMajorMilestone(milestone) ? 5000 : 3000)
   }
 })
 
@@ -118,6 +129,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           v-model:focus-id="focusId"
           :tree="tree"
           :progression="progression"
+          :start-id="startId"
           :inset-bottom="insetBottom"
           @unsupported="view = 'list'"
         />
@@ -161,9 +173,23 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       @answered="onAnswered"
     />
 
-    <!-- 里程碑解鎖訊息 -->
+    <!-- 升級的恭喜訊息 -->
     <div class="toasts" role="status" aria-live="polite">
       <p v-for="toast in toasts" :key="toast.id" class="toast">{{ toast.text }}</p>
+    </div>
+
+    <!-- 大事件的里程碑匾額，點一下就關閉 -->
+    <div class="plaques" role="status" aria-live="polite">
+      <button
+        v-for="plaque in plaques"
+        :key="plaque.id"
+        type="button"
+        class="plaque"
+        @click="plaques = plaques.filter((p) => p.id !== plaque.id)"
+      >
+        <span class="plaque-title">里程碑達成</span>
+        <span class="plaque-text">{{ plaque.text }}</span>
+      </button>
     </div>
 
     <footer class="hint">
@@ -314,8 +340,55 @@ body {
   }
 }
 
+.plaques {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 70;
+  display: grid;
+  gap: 0.75rem;
+  transform: translate(-50%, -50%);
+}
+
+.plaque {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(22rem, 86vw);
+  padding: 1.1rem 1.6rem 1.3rem;
+  border: 4px solid #6b4a1f;
+  border-radius: 14px;
+  background: linear-gradient(#f9d77e, #e7b84a);
+  box-shadow:
+    inset 0 0 0 3px #fff2c4,
+    0 8px 0 rgba(43, 38, 51, 0.4);
+  color: #3d2a0c;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  animation: plaque-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.plaque-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+}
+
+.plaque-text {
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+@keyframes plaque-in {
+  from {
+    transform: translateY(-40px) scale(0.7);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .toast {
+  .toast,
+  .plaque {
     animation: none;
   }
 }

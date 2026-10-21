@@ -127,13 +127,13 @@ export function buildWorld3D(world: WorldLayout): World3D {
       const fog = new THREE.Group()
       const mist = new THREE.Mesh(
         new THREE.ShapeGeometry(shapes),
-        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }),
       )
       mist.geometry.rotateX(-Math.PI / 2)
       mist.position.y = SAND_TOP + height + 1.5
       fog.add(mist)
       const box = bounds.get(region.id)!
-      const cloudCount = Math.max(2, Math.round(((box[2] - box[0]) * (box[3] - box[1])) / 3500))
+      const cloudCount = Math.max(3, Math.round(((box[2] - box[0]) * (box[3] - box[1])) / 2200))
       for (let i = 0, attempt = 0; i < cloudCount && attempt < cloudCount * 6; attempt++) {
         const x = box[0] + random() * (box[2] - box[0])
         const z = box[1] + random() * (box[3] - box[1])

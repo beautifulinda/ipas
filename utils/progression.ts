@@ -12,8 +12,16 @@ export const TOWN_LEVEL_NAMES: Record<TownLevel, string> = {
   3: '城堡',
 }
 
+export interface TownProgress {
+  // 最近一次答對的題數
+  correct: number
+  total: number
+}
+
 export interface Progression {
   townLevels: Map<string, TownLevel>
+  // 只有已有題目的概念才有進度
+  townProgress: Map<string, TownProgress>
   // 地區有任何一題作答過，雲霧就散開
   exploredRegions: Set<string>
   // 地區裡的概念全部升到城堡，插上旗子
@@ -22,8 +30,9 @@ export interface Progression {
   litIslands: Set<string>
 }
 
+// tent、house 是一般升級（放煙火、跳出恭喜訊息）；castle、flag、lighthouse 是大事件（放煙火、出現里程碑匾額）
 export interface Milestone {
-  kind: 'castle' | 'flag' | 'lighthouse'
+  kind: 'tent' | 'house' | 'castle' | 'flag' | 'lighthouse'
   id: string
   title: string
 }
@@ -32,6 +41,7 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
   const latest = latestByQuestion([...attempts])
   const result: Progression = {
     townLevels: new Map(),
+    townProgress: new Map(),
     exploredRegions: new Set(),
     flaggedRegions: new Set(),
     litIslands: new Set(),
@@ -51,6 +61,7 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
         else if (questions.length && correct.length * 2 >= questions.length) level = 2
         else if (answered.length) level = 1
         result.townLevels.set(concept.id, level)
+        if (questions.length) result.townProgress.set(concept.id, { correct: correct.length, total: questions.length })
 
         if (answered.length) result.exploredRegions.add(category.id)
         if (level < 3) regionComplete = false
@@ -63,8 +74,22 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
   return result
 }
 
-// 達成里程碑時跳出的訊息
+// 建議從哪裡開始：依官方順序，第一個有題目、還沒練習過的概念；都練習過或沒有題目時不建議
+export function recommendedStart(map: TopicMap, progression: Progression) {
+  for (const subject of map.subjects) {
+    for (const category of subject.categories) {
+      for (const concept of category.concepts) {
+        if (progression.townProgress.has(concept.id) && progression.townLevels.get(concept.id) === 0) return concept.id
+      }
+    }
+  }
+}
+
+// 達成里程碑時的訊息；一般升級只說恭喜，大事件寫在匾額上
+const UPGRADE_TEXT = '🎉 恭喜升級了，你超棒！'
 const MILESTONE_TEXT: Record<Milestone['kind'], (title: string) => string> = {
+  tent: () => UPGRADE_TEXT,
+  house: () => UPGRADE_TEXT,
   castle: (title) => `🏰 ${title} 升級為${TOWN_LEVEL_NAMES[3]}！`,
   flag: (title) => `🚩 ${title} 全部掌握，插上旗子！`,
   lighthouse: (title) => `🗼 ${title} 的燈塔亮起來了！`,
@@ -74,7 +99,13 @@ export function milestoneText(milestone: Milestone) {
   return MILESTONE_TEXT[milestone.kind](milestone.title)
 }
 
-// 比較作答前後，找出這次新達成的里程碑
+export function isMajorMilestone(milestone: Milestone) {
+  return milestone.kind === 'castle' || milestone.kind === 'flag' || milestone.kind === 'lighthouse'
+}
+
+const UPGRADE_KIND: Record<TownLevel, Milestone['kind'] | undefined> = { 0: undefined, 1: 'tent', 2: 'house', 3: 'castle' }
+
+// 比較作答前後，找出這次新達成的里程碑；城鎮一次升好幾級時只算最高的那一級，降級不算
 export function newMilestones(map: TopicMap, before: Progression, after: Progression): Milestone[] {
   const titles = new Map<string, string>()
   for (const subject of map.subjects) {
@@ -86,7 +117,8 @@ export function newMilestones(map: TopicMap, before: Progression, after: Progres
   }
   const milestones: Milestone[] = []
   for (const [id, level] of after.townLevels) {
-    if (level === 3 && before.townLevels.get(id) !== 3) milestones.push({ kind: 'castle', id, title: titles.get(id)! })
+    const kind = UPGRADE_KIND[level]
+    if (kind && level > (before.townLevels.get(id) ?? 0)) milestones.push({ kind, id, title: titles.get(id)! })
   }
   for (const id of after.flaggedRegions) {
     if (!before.flaggedRegions.has(id)) milestones.push({ kind: 'flag', id, title: titles.get(id)! })

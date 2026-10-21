@@ -11,9 +11,11 @@ import { SEA_COLOR, SKY_COLOR } from '~/utils/scene/palette'
 import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
 
 // insetBottom：畫面底部被其他元素（手機的 bottom sheet）擋住的高度，聚焦時改對準上方可見範圍
-const props = withDefaults(defineProps<{ tree: MapNode; progression: Progression; insetBottom?: number }>(), {
-  insetBottom: 0,
-})
+// startId：建議從這裡開始的城鎮，標籤上方顯示「從這裡開始」
+const props = withDefaults(
+  defineProps<{ tree: MapNode; progression: Progression; startId?: string; insetBottom?: number }>(),
+  { startId: undefined, insetBottom: 0 },
+)
 const focusId = defineModel<string>('focusId', { required: true })
 const emit = defineEmits<{ unsupported: [] }>()
 
@@ -36,13 +38,33 @@ const focusIslandId = computed(() => focusPath.value[1]?.data.id)
 
 const layout = computed(() => buildWorld(props.tree, portrait.value))
 
-// 文字標籤：島名、地區名一律列出，城鎮名只列目前這座島的；實際顯示與否由每格畫面的避讓排版決定
-const labels = computed(() => [
-  ...layout.value.islands.map((i) => ({ key: i.id, kind: 'island' as const, text: i.data.title })),
-  ...layout.value.regions.map((r) => ({ key: r.id, kind: 'region' as const, text: r.data.title })),
+// 文字標籤：「從這裡開始」最優先、不受鏡頭所在的島限制；島名、地區名一律列出，城鎮名只列目前這座島的；
+// 實際顯示與否由每格畫面的避讓排版決定
+type LabelKind = 'start' | 'island' | 'region' | 'town'
+interface Label {
+  key: string
+  anchor: string
+  kind: LabelKind
+  text: string
+  // 城鎮的答對比例（0～1），畫成進度圓餅
+  progress?: { ratio: number; text: string }
+}
+const labels = computed<Label[]>(() => [
+  ...(props.startId ? [{ key: `start:${props.startId}`, anchor: props.startId, kind: 'start' as const, text: '從這裡開始' }] : []),
+  ...layout.value.islands.map((i) => ({ key: i.id, anchor: i.id, kind: 'island' as const, text: i.data.title })),
+  ...layout.value.regions.map((r) => ({ key: r.id, anchor: r.id, kind: 'region' as const, text: r.data.title })),
   ...layout.value.towns
     .filter((t) => t.islandId === focusIslandId.value)
-    .map((t) => ({ key: t.id, kind: 'town' as const, text: t.data.title })),
+    .map((t) => {
+      const progress = props.progression.townProgress.get(t.id)
+      return {
+        key: t.id,
+        anchor: t.id,
+        kind: 'town' as const,
+        text: t.data.title,
+        progress: progress && { ratio: progress.correct / progress.total, text: `答對 ${progress.correct}／${progress.total}` },
+      }
+    }),
 ])
 
 // 螢幕閱讀器與鍵盤用：目前這一層可以前往的位置
@@ -203,22 +225,23 @@ function placeLabels() {
   // 目前這座島的建築先佔位，標籤不會蓋住房子
   for (const label of labels.value) {
     if (label.kind !== 'town') continue
-    const s = toScreen(world.townPosition(label.key))
+    const s = toScreen(world.townPosition(label.anchor))
     placed.push([s.x - 16, s.y - 36, s.x + 16, s.y + 4])
   }
   const elements = labelsEl.value.querySelectorAll<HTMLElement>('[data-key]')
   for (const el of elements) {
-    const key = el.dataset.key!
-    const kind = el.dataset.kind as 'island' | 'region' | 'town'
-    const anchor = world.anchors.get(key)
+    const key = el.dataset.anchor!
+    const kind = el.dataset.kind as LabelKind
+    const anchor = kind === 'start' ? world.townPosition(key) : world.anchors.get(key)
     const bw = el.offsetWidth
     const bh = el.offsetHeight
     let visible = false
     if (anchor) {
       const s = toScreen(anchor)
       let candidates: [number, number][] = []
-      // 島名的錨點在島的最後緣，標籤整個放在錨點上方
-      if (kind === 'island') candidates = [[s.x, s.y - bh / 2 - 6]]
+      // 「從這裡開始」放在城鎮正上方；島名的錨點在島的最後緣，標籤整個放在錨點上方
+      if (kind === 'start') candidates = [[s.x, s.y - 44 - bh / 2]]
+      else if (kind === 'island') candidates = [[s.x, s.y - bh / 2 - 6]]
       else if (kind === 'region') {
         // 地區在畫面上太小時不顯示名稱；換位置時不能離開地區範圍，免得看不出是哪個地區
         const box = world.bounds.get(key)!
@@ -243,7 +266,7 @@ function placeLabels() {
         for (const [cx, cy] of candidates) {
           const box: Box = [cx - bw / 2 - 3, cy - bh / 2 - 3, cx + bw / 2 + 3, cy + bh / 2 + 3]
           const offscreen = box[2] < 0 || box[0] > w || box[3] < 0 || box[1] > h
-          if (offscreen || (kind !== 'island' && placed.some((p) => overlaps(box, p)))) continue
+          if (offscreen || (kind !== 'island' && kind !== 'start' && placed.some((p) => overlaps(box, p)))) continue
           placed.push(box)
           el.style.transform = `translate(${cx - bw / 2}px, ${cy - bh / 2}px)`
           visible = true
@@ -307,13 +330,13 @@ function loop(now: number) {
   placeLabels()
 }
 
-// 達成里程碑：在城堡、旗子或燈塔的位置放煙火
+// 達成里程碑：在城鎮、旗子或燈塔的位置放煙火
 function celebrate(milestones: Milestone[]) {
   if (!world || reduceMotion()) return
   const random = seededRandom(String(Date.now()))
   for (const milestone of milestones) {
     const origin =
-      milestone.kind === 'castle'
+      milestone.kind === 'tent' || milestone.kind === 'house' || milestone.kind === 'castle'
         ? world.townPosition(milestone.id).add(new THREE.Vector3(0, 30, 0))
         : milestone.kind === 'flag'
           ? world.regionFlagPosition(milestone.id)
@@ -419,7 +442,21 @@ watch(
     />
     <!-- 文字標籤疊在 3D 畫面上，位置每格畫面更新 -->
     <div ref="labelsEl" class="labels" aria-hidden="true">
-      <div v-for="label in labels" :key="label.key" class="tag" :class="`tag--${label.kind}`" :data-key="label.key" :data-kind="label.kind">
+      <div
+        v-for="label in labels"
+        :key="label.key"
+        class="tag"
+        :class="`tag--${label.kind}`"
+        :data-key="label.key"
+        :data-anchor="label.anchor"
+        :data-kind="label.kind"
+      >
+        <span
+          v-if="label.progress"
+          class="pie"
+          :style="{ '--ratio': label.progress.ratio }"
+          :title="label.progress.text"
+        />
         {{ label.text }}
       </div>
     </div>
@@ -485,7 +522,53 @@ watch(
 }
 
 .tag--town {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
   font-size: 13px;
+}
+
+/* 答對比例的圓餅：綠色是答對的部分 */
+.pie {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #2b2633;
+  border-radius: 50%;
+  background: conic-gradient(#3a9a4a calc(var(--ratio) * 360deg), #e8e2d4 0);
+}
+
+.tag--start {
+  z-index: 1;
+  padding: 0.25rem 0.8rem;
+  border-color: #b23b37;
+  background: #ff6b5e;
+  color: #fff;
+  font-size: 14px;
+  animation: bob 1.6s ease-in-out infinite;
+}
+
+.tag--start::after {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  border: 7px solid transparent;
+  border-top-color: #b23b37;
+  border-bottom: 0;
+  content: '';
+  transform: translateX(-50%);
+}
+
+@keyframes bob {
+  50% {
+    margin-top: -4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag--start {
+    animation: none;
+  }
 }
 
 /* 平常隱藏，用 Tab 鍵移到時才出現在左下角 */

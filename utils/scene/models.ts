@@ -84,10 +84,19 @@ export function makeHill(theme: Theme3D, random: () => number) {
 export function makeBuilding(level: TownLevel) {
   const group = new THREE.Group()
   if (level === 0) {
-    // 工地：一塊泥土地、告示牌與幾根木樁
+    // 工地：一塊泥土地、黃色告示牌、木樁與三角錐；比其他建築大一些，還沒練習的地方在地圖上才看得到
     group.add(mesh(new THREE.CylinderGeometry(8, 8, 0.6, 8), mat('#b98a5a'), 0.3))
     group.add(mesh(new THREE.BoxGeometry(0.8, 6, 0.8), mat('#8a5a34'), 3))
-    group.add(mesh(new THREE.BoxGeometry(7, 3.6, 0.6), mat('#f3d9a4'), 5.6))
+    group.add(mesh(new THREE.BoxGeometry(7, 3.6, 0.6), mat('#ffd23f'), 5.6))
+    for (const [x, z] of [
+      [-3.5, 5.5],
+      [3.5, 5.5],
+    ]) {
+      const cone = mesh(new THREE.ConeGeometry(1.4, 3.2, 6), mat('#ff7a2f'), 1.6)
+      cone.position.x = x
+      cone.position.z = z
+      group.add(cone)
+    }
     for (const [x, z] of [
       [-6, -4],
       [6, -4],
@@ -99,6 +108,7 @@ export function makeBuilding(level: TownLevel) {
       post.position.z = z
       group.add(post)
     }
+    group.scale.setScalar(1.5)
   } else if (level === 1) {
     // 帳篷
     const tent = mesh(new THREE.ConeGeometry(7, 10, 4), mat('#f2a65a'), 5)
@@ -210,7 +220,7 @@ export function setLighthouseLit(lighthouse: THREE.Object3D, lit: boolean) {
 export function makeCloud(random: () => number) {
   // 扁平、半透明，看得出底下的地形，只是蓋上一層霧
   const group = new THREE.Group()
-  const material = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true, transparent: true, opacity: 0.8 })
+  const material = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true, transparent: true, opacity: 0.95 })
   const count = 2 + Math.floor(random() * 2)
   for (let i = 0; i < count; i++) {
     const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(4 + random() * 3, 1), material)

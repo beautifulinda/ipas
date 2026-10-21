@@ -1,7 +1,7 @@
 // 〈城鎮依練習成果升級〉的步驟定義
 import { Given, Then, When } from 'quickpickle'
 import { expect } from 'vitest'
-import { milestoneText } from '~/utils/progression'
+import { isMajorMilestone, milestoneText, type Milestone } from '~/utils/progression'
 import { concept, question } from '../unit/fixtures'
 import { answer, findConcept, findRegion, mainConcept, progression, type World } from './world'
 
@@ -69,8 +69,20 @@ Then(/^島「(.+)」的燈塔亮起$/, (world: World, island) => {
 })
 
 // 畫面上的訊息前面有圖示（例如 🏰），比對時略過
+const texts = (milestones: Milestone[]) => milestones.map((m) => milestoneText(m).replace(/^\S+ /, ''))
+
 Then(/^畫面放煙火，並顯示「(.+)」$/, (world: World, text) => {
-  expect(world.milestones.map((m) => milestoneText(m).replace(/^\S+ /, ''))).toContain(text)
+  expect(world.milestones.length).toBeGreaterThan(0)
+  expect(texts(world.milestones.filter((m) => !isMajorMilestone(m)))).toContain(text)
+})
+
+Then(/^畫面放煙火，並出現里程碑匾額「(.+)」$/, (world: World, text) => {
+  expect(world.milestones.length).toBeGreaterThan(0)
+  expect(texts(world.milestones.filter(isMajorMilestone))).toContain(text)
+})
+
+Then(/^不會另外顯示「(.+)」$/, (world: World, text) => {
+  expect(texts(world.milestones)).not.toContain(text)
 })
 
 Then('不會再放一次煙火', (world: World) => {
