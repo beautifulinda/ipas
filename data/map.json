@@ -137,7 +137,8 @@
                   "explanation": "精確率 = TP ÷ (TP + FP) = 80 ÷ (80 + 10) ≈ 88.9%。選項 A 的 80% 是召回率 TP ÷ (TP + FN) = 80 ÷ 100。",
                   "difficulty": 2,
                   "source": {
-                    "type": "original"
+                    "type": "original",
+                    "note": "LLM 輔助撰寫，作者審核通過"
                   },
                   "reviewed": true,
                   "tags": [
