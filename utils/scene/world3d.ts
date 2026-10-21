@@ -127,7 +127,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
       const fog = new THREE.Group()
       const mist = new THREE.Mesh(
         new THREE.ShapeGeometry(shapes),
-        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }),
       )
       mist.geometry.rotateX(-Math.PI / 2)
       mist.position.y = SAND_TOP + height + 1.5

@@ -218,9 +218,15 @@ export function setLighthouseLit(lighthouse: THREE.Object3D, lit: boolean) {
 
 // 雲霧：幾顆半透明的低多邊形雲團
 export function makeCloud(random: () => number) {
-  // 扁平、半透明，看得出底下的地形，只是蓋上一層霧
+  // 扁平、半透明，看得出底下的地形與工地；不寫入深度，後面的建築不會被雲整個遮掉
   const group = new THREE.Group()
-  const material = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true, transparent: true, opacity: 0.95 })
+  const material = new THREE.MeshLambertMaterial({
+    color: '#ffffff',
+    flatShading: true,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+  })
   const count = 2 + Math.floor(random() * 2)
   for (let i = 0; i < count; i++) {
     const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(4 + random() * 3, 1), material)

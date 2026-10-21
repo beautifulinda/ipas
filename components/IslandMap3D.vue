@@ -17,7 +17,8 @@ const props = withDefaults(
   { startId: undefined, insetBottom: 0 },
 )
 const focusId = defineModel<string>('focusId', { required: true })
-const emit = defineEmits<{ unsupported: [] }>()
+// start：點了「從這裡開始」，要直接開始練習那個主題
+const emit = defineEmits<{ unsupported: []; start: [conceptId: string] }>()
 
 // 鏡頭：固定的斜俯視角度，旋轉鎖住
 const FOV = 32
@@ -69,6 +70,7 @@ const labels = computed<Label[]>(() => [
 
 // 螢幕閱讀器與鍵盤用：目前這一層可以前往的位置
 const navTargets = computed(() => focusNode.value.children?.map((c) => c.data) ?? [])
+const startTitle = computed(() => layout.value.towns.find((t) => t.id === props.startId)?.data.title)
 
 let renderer: THREE.WebGLRenderer | undefined
 let camera: THREE.PerspectiveCamera
@@ -450,6 +452,7 @@ watch(
         :data-key="label.key"
         :data-anchor="label.anchor"
         :data-kind="label.kind"
+        @click="label.kind === 'start' && emit('start', label.anchor)"
       >
         <span
           v-if="label.progress"
@@ -462,6 +465,7 @@ watch(
     </div>
     <!-- 鍵盤與螢幕閱讀器的導覽：目前這一層可以前往的位置 -->
     <nav class="sr-nav" aria-label="地圖導覽">
+      <button v-if="startId" type="button" @click="emit('start', startId)">從這裡開始：{{ startTitle }}</button>
       <button v-if="focusNode.parent" type="button" @click="goUp">回上一層</button>
       <button v-for="node in navTargets" :key="node.id" type="button" @click="focusId = node.id">
         前往：{{ node.title }}
@@ -540,6 +544,9 @@ watch(
 
 .tag--start {
   z-index: 1;
+  /* 標籤層不接收點擊，只有這個標記可以點 */
+  pointer-events: auto;
+  cursor: pointer;
   padding: 0.25rem 0.8rem;
   border-color: #b23b37;
   background: #ff6b5e;

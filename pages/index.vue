@@ -87,6 +87,14 @@ watch(progression, (after, before) => {
   }
 })
 
+// 點「從這裡開始」：前往那個主題並直接顯示題目（手機開全螢幕作答，桌面捲到練習題）
+async function onStart(conceptId: string) {
+  focusId.value = conceptId
+  await nextTick()
+  if (isMobile.value) quizOpen.value = true
+  else document.querySelector('.practice')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 function goUp() {
   const parent = path.value[path.value.length - 2]
   if (parent) focusId.value = parent.id
@@ -130,6 +138,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           :tree="tree"
           :progression="progression"
           :start-id="startId"
+          @start="onStart"
           :inset-bottom="insetBottom"
           @unsupported="view = 'list'"
         />
