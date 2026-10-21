@@ -4,7 +4,7 @@
 
 ## 專案概要
 
-- iPAS AI 應用規劃師（初級）的主題地圖與練習網站，個人 side project，兼作求職作品集。
+- iPAS AI 應用規劃師（初級）的主題地圖與練習網站，個人 side project，公開作為作品展示。
 - Repo：`beautifulinda/ipas`，部署網址：`https://beautifulinda.github.io/ipas/`
 - 非官方工具，頁面與 README 都必須註明與 iPAS 主辦單位無關。
 
