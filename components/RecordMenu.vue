@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
-import { summary, wrongQuestionIds } from '~/utils/progress'
+import { summary } from '~/utils/progress'
 
 const props = defineProps<{ map: TopicMap }>()
 const emit = defineEmits<{ navigate: [conceptId: string] }>()
 
-const { attempts, storageError, exportFile, importFile } = useRecords()
+const { attempts, wrongQuestionIds, storageError, exportFile, importFile } = useRecords()
 const index = computed(() => questionIndex(props.map))
 const stats = computed(() => summary([...attempts.value]))
 const wrong = computed(() =>
-  wrongQuestionIds([...attempts.value])
+  wrongQuestionIds.value
     .map((id) => index.value.get(id))
     .filter((item) => item !== undefined),
 )

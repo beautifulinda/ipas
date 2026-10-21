@@ -4,10 +4,12 @@ import {
   EXPORT_VERSION,
   latestByQuestion,
   newAttempts,
+  newDismissals,
   parseExport,
+  shouldAskDismiss,
   summary,
   toExport,
-  wrongQuestionIds,
+  wrongBook,
 } from '~/utils/progress'
 import { attempt } from './fixtures'
 
@@ -20,15 +22,29 @@ describe('latestByQuestion', () => {
   })
 })
 
-describe('wrongQuestionIds', () => {
-  it('只列出最近一次答錯的題目，最新的排前面', () => {
+describe('wrongBook', () => {
+  it('答錯過的題目都在錯題本，後來答對也不會自動移出；最近答錯的排前面', () => {
     const attempts = [
       attempt('q1', false, '2026-10-21T01:00:00.000Z'),
-      attempt('q1', true, '2026-10-21T02:00:00.000Z'), // 後來答對，不算錯題
+      attempt('q1', true, '2026-10-21T02:00:00.000Z'),
       attempt('q2', false, '2026-10-21T03:00:00.000Z'),
-      attempt('q3', false, '2026-10-21T04:00:00.000Z'),
+      attempt('q3', true, '2026-10-21T04:00:00.000Z'),
     ]
-    expect(wrongQuestionIds(attempts)).toEqual(['q3', 'q2'])
+    expect(wrongBook(attempts)).toEqual(['q2', 'q1'])
+  })
+
+  it('移除後就不在錯題本；移除後又答錯則重新進入', () => {
+    const attempts = [attempt('q1', false, '2026-10-21T01:00:00.000Z')]
+    const dismissals = [{ questionId: 'q1', dismissedAt: '2026-10-21T02:00:00.000Z' }]
+    expect(wrongBook(attempts, dismissals)).toEqual([])
+    expect(wrongBook([...attempts, attempt('q1', false, '2026-10-21T03:00:00.000Z')], dismissals)).toEqual(['q1'])
+  })
+
+  it('只有答對錯題本裡的題目時才詢問是否移除', () => {
+    const attempts = [attempt('q1', false, '2026-10-21T01:00:00.000Z')]
+    expect(shouldAskDismiss('q1', true, attempts, [])).toBe(true)
+    expect(shouldAskDismiss('q1', false, attempts, [])).toBe(false)
+    expect(shouldAskDismiss('q2', true, attempts, [])).toBe(false)
   })
 })
 
@@ -43,11 +59,18 @@ describe('summary', () => {
 })
 
 describe('匯出與匯入', () => {
-  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同', () => {
-    const records = [{ ...attempt('q1', true), id: 7 }]
-    const file = toExport(records, new Date('2026-10-21T00:00:00.000Z'))
+  const dismissal = { questionId: 'q1', dismissedAt: '2026-10-21T05:00:00.000Z' }
+
+  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同（含錯題本的移除紀錄）', () => {
+    const file = toExport([{ ...attempt('q1', true), id: 7 }], [{ ...dismissal, id: 3 }], new Date('2026-10-21'))
     expect(file.attempts[0]).not.toHaveProperty('id')
-    expect(parseExport(JSON.stringify(file))).toEqual(file.attempts)
+    expect(file.dismissals[0]).not.toHaveProperty('id')
+    expect(parseExport(JSON.stringify(file))).toEqual({ attempts: file.attempts, dismissals: file.dismissals })
+  })
+
+  it('仍可匯入版本 1 的檔案（沒有移除紀錄）', () => {
+    const v1 = { app: EXPORT_APP, version: 1, exportedAt: '2026-10-20', attempts: [attempt('q1', false)] }
+    expect(parseExport(JSON.stringify(v1)).dismissals).toEqual([])
   })
 
   it.each([
@@ -56,7 +79,7 @@ describe('匯出與匯入', () => {
     ['版本不符', JSON.stringify({ app: EXPORT_APP, version: 99, attempts: [] }), '不支援的紀錄檔版本：99。'],
     [
       '紀錄缺欄位',
-      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [{ questionId: 'q1' }] }),
+      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [{ questionId: 'q1' }], dismissals: [] }),
       '紀錄檔內容格式不正確。',
     ],
     [
@@ -65,7 +88,13 @@ describe('匯出與匯入', () => {
         app: EXPORT_APP,
         version: EXPORT_VERSION,
         attempts: [{ ...attempt('q1', true), answeredAt: '昨天' }],
+        dismissals: [],
       }),
+      '紀錄檔內容格式不正確。',
+    ],
+    [
+      '版本 2 缺少移除紀錄',
+      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [] }),
       '紀錄檔內容格式不正確。',
     ],
   ])('%s時顯示可讀的錯誤訊息', (_, text, message) => {
@@ -83,6 +112,9 @@ describe('匯出與匯入', () => {
     expect(newAttempts(existing, incoming).map((a) => `${a.questionId}@${a.answeredAt}`)).toEqual([
       'q2@2026-10-21T02:00:00.000Z',
       'q1@2026-10-21T03:00:00.000Z',
+    ])
+    expect(newDismissals([dismissal], [dismissal, { ...dismissal, questionId: 'q2' }])).toEqual([
+      { ...dismissal, questionId: 'q2' },
     ])
   })
 })

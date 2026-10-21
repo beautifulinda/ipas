@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import type { Concept } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
-import { latestByQuestion, type Attempt } from '~/utils/progress'
+import { DISMISS_PROMPT, latestByQuestion, shouldAskDismiss, type Attempt } from '~/utils/progress'
 
 const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
 const emit = defineEmits<{ answered: [questionId: string, choice: string, correct: boolean] }>()
 
+const { dismissals, dismiss } = useRecords()
 const questions = computed(() => practiceQuestions(props.concept))
 const index = ref(0)
 const current = computed(() => questions.value[index.value])
 const latest = computed(() => latestByQuestion([...props.attempts]))
+
+// 錯題本的題目答對時，詢問是否移除；不回答或換題就當作先保留
+const dismissPrompt = ref<'ask' | 'removed'>()
 
 // 換概念時從第一題開始
 watch(
@@ -18,9 +22,20 @@ watch(
     index.value = 0
   },
 )
+watch(current, () => {
+  dismissPrompt.value = undefined
+})
 
 function onAnswered(choice: string, correct: boolean) {
-  emit('answered', current.value.id, choice, correct)
+  const id = current.value.id
+  // 要在記下這次作答之前判斷題目是否在錯題本裡
+  dismissPrompt.value = shouldAskDismiss(id, correct, props.attempts, dismissals.value) ? 'ask' : undefined
+  emit('answered', id, choice, correct)
+}
+
+async function onDismiss() {
+  await dismiss(current.value.id)
+  dismissPrompt.value = 'removed'
 }
 
 function statusOf(questionId: string) {
@@ -50,6 +65,14 @@ function statusOf(questionId: string) {
         </button>
       </nav>
       <QuestionCard :key="current.id" :question="current" @answered="onAnswered" />
+      <div v-if="dismissPrompt === 'ask'" class="dismiss" role="group" aria-label="錯題本">
+        <p>{{ DISMISS_PROMPT }}</p>
+        <div class="dismiss-actions">
+          <button type="button" class="primary" @click="onDismiss">移除</button>
+          <button type="button" @click="dismissPrompt = undefined">先保留</button>
+        </div>
+      </div>
+      <p v-else-if="dismissPrompt === 'removed'" class="dismiss-done" role="status">已從錯題本移除。</p>
       <button v-if="index < questions.length - 1" type="button" class="next" @click="index++">下一題 →</button>
     </template>
   </section>
@@ -97,6 +120,46 @@ h3 {
 .chip.active {
   outline: 3px solid #4f8cff;
   outline-offset: 1px;
+}
+
+.dismiss {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 2px solid #e8c55a;
+  border-radius: 10px;
+  background: #fff8e1;
+}
+
+.dismiss p {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.dismiss-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dismiss-actions button {
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 2px solid #2b2633;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dismiss-actions .primary {
+  background: #2b2633;
+  color: #fff;
+}
+
+.dismiss-done {
+  margin: 0.75rem 0 0;
+  color: #2a7a38;
+  font-weight: 600;
 }
 
 .next {

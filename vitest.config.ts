@@ -10,6 +10,10 @@ export default defineConfig({
   },
   test: {
     include: ['tests/unit/**/*.test.ts', 'tests/features/**/*.feature'],
-    setupFiles: ['tests/features/progression.steps.ts'],
+    setupFiles: [
+      'tests/features/common.steps.ts',
+      'tests/features/progression.steps.ts',
+      'tests/features/wrongBook.steps.ts',
+    ],
   },
 })

@@ -61,6 +61,8 @@
    - 必須透過 vue-router（頁面在 `pages/index.vue`），不可直接呼叫 `history.pushState`：Nuxt 的簡易路由在有 baseURL 時處理上一頁會把網址疊成 `/ipas/ipas/`。
    - 裝置判斷在掛載後才生效（`composables/useDevice.ts`），避免靜態 HTML 與 hydration 不一致。
 4. ✅ 概念卡片與練習題作答、作答紀錄存 IndexedDB（`composables/useRecords.ts`）、錯題本、匯出匯入（格式與合併邏輯在 `utils/progress.ts`）。
+   - 錯題本規則（作者 2026-10-21 決定，需求在 `tests/features/錯題本.feature`）：答錯進入錯題本；答對不自動移出，而是詢問「這題答對了，要從錯題本移除嗎？」，使用者選「移除」才移出；移除後又答錯會重新進入；錯題本與城鎮等級無關。
+   - 移除紀錄存在 IndexedDB 的 `dismissals`（資料庫版本 2，從版本 1 升級會保留舊作答紀錄）；匯出檔版本 2 含 `dismissals`，仍可匯入版本 1。
 5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`），三項都過才部署；PR 只跑檢查不部署。尚未做：Playwright 手機與桌面尺寸測試。
    - 需求測試（作者 2026-10-21 決定）：功能需求用正體中文 Gherkin（`# language: zh-TW`，假設／當／那麼／而且／但是）寫在 `tests/features/*.feature`，每個功能都要有 Happy Path 與 Sad Path，用詞要讓作者不看程式碼就能審。由 quickpickle 在 Vitest 執行，步驟定義在 `tests/features/*.steps.ts`（要加進 `vitest.config.ts` 的 `setupFiles`）。新的需求檔先給作者審過再實作步驟。
    - E2E 計畫用 Playwright 讀同樣的中文 Gherkin（候選：`playwright-bdd` 或 `@quickpickle/playwright`），在本機與 GitHub Actions 都要跑；CI 沒有考古題，E2E 只能用正式題庫或測試資料。
