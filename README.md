@@ -91,7 +91,7 @@
 ## 系統架構
 
 ```
-[題庫 JSON] ──> [GitHub Actions：格式檢查、答案驗證、測試] ──> [nuxt generate] ──> [GitHub Pages]
+[題庫 JSON] ──> [GitHub Actions：題庫檢查、型別檢查、單元測試] ──> [nuxt generate] ──> [GitHub Pages]
                                                                                      │
                                                          （Phase 2）[Supabase：匿名答題統計、題目回報]
 ```
@@ -141,7 +141,8 @@ Subject（科目）
 - [x] 作答紀錄與錯題本存於瀏覽器（IndexedDB）
 - [x] 學習紀錄匯出、匯入（JSON）
 - [ ] 隱私說明頁
-- [ ] CI：題庫格式檢查、單元測試、Playwright 雙尺寸測試
+- [x] CI：題庫格式檢查、型別檢查、單元測試（Vitest），任何一項失敗就不部署
+- [ ] Playwright 手機與桌面尺寸 E2E 測試
 
 ### Phase 2：互動功能
 
@@ -166,7 +167,7 @@ npm run validate   # 題庫檢查
 npm run review     # 逐題審核練習題草稿
 npm run generate   # 產生靜態網站
 npm start          # 產生靜態網站並在 http://localhost:4173/ipas/ 預覽
-# npm run test     # 單元測試（Vitest，尚未建立）
+npm test           # 單元測試（Vitest）
 ```
 
 本機的 `npm start` 與 `npm run dev` 會載入 `data/private/` 的官方公告試題（若檔案存在），公開部署的網站不含這些題目。

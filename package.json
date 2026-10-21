@@ -10,6 +10,7 @@
     "start": "nuxt generate && rm -rf .output/preview && mkdir -p .output/preview && cp -R .output/public .output/preview/ipas && npx serve -l 4173 --no-clipboard .output/preview",
     "postinstall": "nuxt prepare",
     "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
     "validate": "node scripts/validate-data.mjs",
     "review": "node scripts/review.mjs"
   },
@@ -38,6 +39,7 @@
     "@types/d3-zoom": "^3.0.9",
     "@types/three": "^0.186.0",
     "typescript": "~5.9",
+    "vitest": "^5.0.5",
     "vue-tsc": "^3.3.13"
   }
 }

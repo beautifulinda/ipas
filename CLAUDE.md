@@ -61,7 +61,7 @@
    - 必須透過 vue-router（頁面在 `pages/index.vue`），不可直接呼叫 `history.pushState`：Nuxt 的簡易路由在有 baseURL 時處理上一頁會把網址疊成 `/ipas/ipas/`。
    - 裝置判斷在掛載後才生效（`composables/useDevice.ts`），避免靜態 HTML 與 hydration 不一致。
 4. ✅ 概念卡片與練習題作答、作答紀錄存 IndexedDB（`composables/useRecords.ts`）、錯題本、匯出匯入（格式與合併邏輯在 `utils/progress.ts`）。
-5. CI：JSON 格式與 `reviewed` 檢查、Vitest 單元測試、Playwright 手機與桌面尺寸測試。
+5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`），三項都過才部署；PR 只跑檢查不部署。尚未做：Playwright 手機與桌面尺寸測試。
 
 第一階段目標是「地圖能操作、網址能打開」，題目數量、Supabase、贊助連結都延後。
 
