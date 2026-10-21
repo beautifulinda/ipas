@@ -4,7 +4,7 @@
 
 > 本專案為個人製作的練習工具，與 iPAS 主辦單位無關，內容不代表官方立場。考試範圍與規定請以官方最新公告為準。
 
-- 線上練習：`https://beautifulinda.github.io/ipas/`（待部署）
+- 線上練習：<https://beautifulinda.github.io/ipas/>
 - 狀態：開發中（Phase 1）
 
 ## 解決的問題
@@ -133,7 +133,7 @@ Subject（科目）
 ### Phase 1：靜態版上線
 
 - [x] 建立 Nuxt 3 專案，設定 `nuxt generate` 與 GitHub Actions 部署流程
-- [ ] 部署至 GitHub Pages（尚未建立遠端 repo）
+- [x] 部署至 GitHub Pages
 - [x] 定義資料結構與型別，建立範例資料
 - [x] 桌面版地圖：島嶼地圖、點擊縮放、拖曳、麵包屑、鍵盤操作
 - [x] 手機版地圖：返回按鈕、右滑手勢（系統返回手勢）、bottom sheet、全螢幕作答、清單模式

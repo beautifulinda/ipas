@@ -54,7 +54,7 @@
 
 ## 目前進度與下一步（Phase 1）
 
-1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。尚未建立遠端 repo、尚未 push。
+1. ✅ 建立 Nuxt 3 專案，設定 baseURL 與 GitHub Actions 部署流程。2026-10-21 已推送到 GitHub 並部署到 Pages（只推 `main`；提交作者信箱改用 GitHub noreply，本機 git 設定已改，舊提交保留在本機分支 `backup/before-rewrite`，不推送）。
 2. ✅ 讀取 `data/map.json`，完成桌面版地圖（島嶼地圖）的點擊縮放、麵包屑與鍵盤操作。
 3. ✅ 手機版：返回按鈕、bottom sheet（可拖曳展開／收起／關閉）、全螢幕作答、觸控目標 44px、清單模式。
    - 右滑手勢靠瀏覽器歷史紀錄實現：地圖位置同步到網址 `?at=節點ID`（`composables/useFocusHistory.ts`），iPhone 左緣右滑、Android 返回鍵都會回上一層。
