@@ -40,7 +40,8 @@
   - 匯入：`node scripts/import-past-papers.mjs ~/Vault/Sources/PDF data/private/past-papers.concepts.json`，輸出 `data/private/past-papers.json`；概念對照檔由 Claude 逐題判斷，可再調整。
   - 網站在檔案存在時才載入（`import.meta.glob`），GitHub Actions 部署時沒有這個檔案，公開版不含考古題。不要用本機 `npm run generate` 的產出手動部署。
   - `npm run validate` 會擋下出現在 git 追蹤檔案中的考古題（ID 以 `past-` 開頭）。
-  - 「不公開官方試題」是作者自訂的保守規則，不是官方明文禁止：著作權法第 9 條排除「依法令舉行之各類考試試題」，但查無函釋認定 iPAS 屬於此類。作者 2026-10-20 已寫信詢問 iPAS（`ipas@itri.org.tw`），收到回覆前維持現行規則；他人撰寫的解析一律不轉載。
+  - iPAS 能力鑑定小組 2026-10-21 回信確認：公開之考試樣題及公開考題「僅供個人學習及教學參考，不得重製、改作，或作為付費題庫與商用教育應用程式等營利用途」。因此考古題維持只在本機練習，不公開、不改寫成自己的題目；他人撰寫的解析也不轉載。
+  - 同一封回信要求：參考評鑑內容、學習指引規劃學習架構時，須留意版本與適用性，並註明資料來源為「經濟部產業人才能力鑑定（iPAS）官網」。頁首免責聲明旁已顯示 `scopeSource`，官方改版時要更新版本。
 - 題目為自行撰寫，可用 LLM 產生草稿，人工審核後才把 `reviewed` 設為 `true`。CI 必須擋下 `reviewed: false` 的題目。
 - 每題標註 `source.type`（`original` 或 `official-link`）。
 - 科目、分類、概念依官方〈AI 應用規劃師能力鑑定 評鑑內容範圍參考〉115.02 更新版（作者 2026-10-20 確認採用）：分類＝評鑑主題（如 L113），概念＝評鑑內容（如 L11302），ID 直接用官方代碼，來源記在 `data/map.json` 的 `scopeSource`。官方改版時以新版為準，不要自行補上猜測內容。

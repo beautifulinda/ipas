@@ -105,7 +105,13 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           <RecordMenu :map="map" @navigate="focusId = $event" />
         </div>
       </div>
-      <p class="disclaimer">{{ map.disclaimer }}</p>
+      <p class="disclaimer">
+        {{ map.disclaimer }}
+        <template v-if="map.scopeSource">
+          資料來源：經濟部產業人才能力鑑定（iPAS）官網
+          <a :href="map.scopeSource.url" target="_blank" rel="noopener">〈{{ map.scopeSource.title }}〉</a>。
+        </template>
+      </p>
       <MapBreadcrumb :path="path" @navigate="focusId = $event" />
     </header>
 
@@ -237,6 +243,10 @@ body {
   margin: 0.25rem 0 0.75rem;
   color: #555;
   font-size: 0.85rem;
+}
+
+.disclaimer a {
+  color: inherit;
 }
 
 .main {
