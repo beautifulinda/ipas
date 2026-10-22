@@ -74,6 +74,7 @@
    - 專案：桌面 Chrome、Android（Pixel 7）、iPhone（WebKit），開啟 `reducedMotion` 讓點擊位置穩定。
    - 資料：`IPAS_E2E=1` 建置時 `#map-data` 指向 `tests/e2e/fixtures/map.json`、`#private-data` 指向空資料夾（本機與 CI 一致，不讀考古題），輸出到 `.output-e2e`。需求背景的主題表格要和假題庫一致，步驟會檢查。
    - 指令：`npm run e2e:build` 再 `npm run e2e`。
+   - 無障礙（作者 2026-10-22 審過，需求在 `tests/features/無障礙.feature`）：送出答案後焦點移到作答結果；手機作答畫面背景設 `inert`、Tab 在畫面內循環、關閉後焦點回到「開始練習」，升級卡不受 inert 影響；桌面點「從這裡開始」焦點移到面板標題（方向鍵換主題不搬焦點）；文字對比用 `@axe-core/playwright` 檢查（固定 4.13，不用剛發布的版本）。只適用單一裝置的場景標 `@桌面` 或 `@手機`，其他裝置略過。WebKit 預設 Tab 不會移到按鈕，步驟裡改按 Option+Tab。還沒做：「下一題」後焦點、升級卡唸出整條升級路線、選項改單選題語意。
 
 第一階段目標是「地圖能操作、網址能打開」，題目數量、Supabase、贊助連結都延後。
 

@@ -1,22 +1,11 @@
-/// <reference types="node" />
 // 「從這裡開始」的 E2E 步驟：在真的瀏覽器裡點 3D 地圖上的標記
-import { readFileSync } from 'node:fs'
 import { expect } from '@playwright/test'
 import { createBdd, type DataTable } from 'playwright-bdd'
-import type { TopicMap } from '../../types/map'
+import { conceptId, concepts } from './fixture'
 
 const { Given, When, Then } = createBdd()
 
 // 網站用 tests/e2e/fixtures/map.json 建置；需求裡的主題表格必須和假題庫一致，否則測的不是需求描述的情況
-const fixture: TopicMap = JSON.parse(readFileSync(new URL('./fixtures/map.json', import.meta.url), 'utf8'))
-const concepts = fixture.subjects.flatMap((s) => s.categories.flatMap((c) => c.concepts))
-
-function conceptId(title: string) {
-  const found = concepts.find((c) => c.title === title)
-  if (!found) throw new Error(`假題庫裡沒有主題「${title}」`)
-  return found.id
-}
-
 Given('地圖上依官方順序有三個主題：', async ({ page }, table: DataTable) => {
   const rows = table.hashes() as { 主題: string; 題數: string }[]
   expect(concepts.map((c) => ({ 主題: c.title, 題數: String(c.questions.length) }))).toEqual(rows)

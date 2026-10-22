@@ -18,6 +18,22 @@ onUnmounted(() => {
   if (opener?.isConnected) opener.focus({ preventScroll: true })
 })
 
+// Tab 在作答畫面裡循環：最後一個再按 Tab 回到第一個，反過來也一樣，不會離開作答畫面
+const dialogEl = ref<HTMLElement>()
+function trapTab(event: KeyboardEvent) {
+  const focusable = [...(dialogEl.value?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]') ?? [])]
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (!first || !last) return
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 function onAnswered(questionId: string, choice: string, correct: boolean) {
   emit('answered', questionId, choice, correct)
 }
@@ -27,12 +43,14 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
   <Teleport to="body">
     <!-- Esc 在這裡就攔下，只關閉作答畫面，不會讓地圖回上一層 -->
     <div
+      ref="dialogEl"
       class="quiz"
       role="dialog"
       aria-modal="true"
       aria-labelledby="quiz-title"
       data-no-map-keys
       @keydown.esc.stop.prevent="emit('close')"
+      @keydown.tab="trapTab"
     >
       <header class="quiz-header">
         <h2 id="quiz-title">{{ concept.title }}・練習</h2>

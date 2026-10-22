@@ -33,6 +33,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "~4.13.0",
     "@playwright/test": "^1.64.1",
     "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-polygon": "^3.0.2",
