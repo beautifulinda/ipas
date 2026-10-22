@@ -1,7 +1,7 @@
 // 〈城鎮依練習成果升級〉的步驟定義
 import { Given, Then, When } from 'quickpickle'
 import { expect } from 'vitest'
-import { isMajorMilestone, milestoneText, type Milestone } from '~/utils/progression'
+import { featuredMilestone, isMajorMilestone, milestoneText, type Milestone } from '~/utils/progression'
 import { concept, question } from '../unit/fixtures'
 import { answer, findConcept, findRegion, mainConcept, progression, type World } from './world'
 
@@ -18,6 +18,15 @@ Given(/^地區「(.+)」另外有主題「(.+)」，主題有 (\d+) 題已審核
   const id = `K-${title}`
   const questions = Array.from({ length: Number(count) }, (_, i) => question(`${id}-${i + 1}`))
   findRegion(world, region).concepts.push({ ...concept(id, questions), title })
+})
+
+// 島上還有別的地區沒完成，燈塔才不會跟著亮
+Given('島上另外有一個還沒完成的地區', (world: World) => {
+  world.map.subjects[0].categories.push({
+    id: 'C-其他地區',
+    title: '其他地區',
+    concepts: [{ ...concept('K-其他主題', [question('K-其他主題-1')]), title: '其他主題' }],
+  })
 })
 
 Given(/^地區「(.+)」是島「(.+)」上唯一的地區$/, (world: World, region, island) => {
@@ -69,20 +78,29 @@ Then(/^島「(.+)」的燈塔亮起$/, (world: World, island) => {
 })
 
 // 畫面上的訊息前面有圖示（例如 🏰），比對時略過
-const texts = (milestones: Milestone[]) => milestones.map((m) => milestoneText(m).replace(/^\S+ /, ''))
+const text = (milestone: Milestone) => milestoneText(milestone).replace(/^\S+ /, '')
 
-Then(/^畫面放煙火，並顯示「(.+)」$/, (world: World, text) => {
-  expect(world.milestones.length).toBeGreaterThan(0)
-  expect(texts(world.milestones.filter((m) => !isMajorMilestone(m)))).toContain(text)
+// 同時達成好幾個里程碑時，畫面只演最大的那一個（見 升級演出.feature）
+function featured(world: World) {
+  const milestone = featuredMilestone(world.milestones)
+  expect(milestone, '這次作答應該有新的里程碑').toBeDefined()
+  return milestone!
+}
+
+Then(/^畫面放煙火，並顯示「(.+)」$/, (world: World, expected) => {
+  const milestone = featured(world)
+  expect(isMajorMilestone(milestone)).toBe(false)
+  expect(text(milestone)).toBe(expected)
 })
 
-Then(/^畫面放煙火，並出現里程碑匾額「(.+)」$/, (world: World, text) => {
-  expect(world.milestones.length).toBeGreaterThan(0)
-  expect(texts(world.milestones.filter(isMajorMilestone))).toContain(text)
+Then(/^畫面放煙火，並出現里程碑匾額「(.+)」$/, (world: World, expected) => {
+  const milestone = featured(world)
+  expect(isMajorMilestone(milestone)).toBe(true)
+  expect(text(milestone)).toBe(expected)
 })
 
-Then(/^不會另外顯示「(.+)」$/, (world: World, text) => {
-  expect(texts(world.milestones)).not.toContain(text)
+Then(/^不會另外顯示「(.+)」$/, (world: World, expected) => {
+  expect(text(featured(world))).not.toBe(expected)
 })
 
 Then(/^不會(?:再)?放(?:一次)?煙火$/, (world: World) => {

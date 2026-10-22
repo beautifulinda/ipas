@@ -1,7 +1,8 @@
 // 需求測試共用的狀態：模擬一份題庫、使用者的作答與錯題本移除紀錄
 import type { Concept, TopicMap } from '~/types/map'
 import { DISMISS_PROMPT, shouldAskDismiss, wrongBook, type Attempt, type Dismissal } from '~/utils/progress'
-import { computeProgression, newMilestones, type Milestone } from '~/utils/progression'
+import { celebrationFor, computeProgression, newMilestones, type CelebrationPlan, type Milestone } from '~/utils/progression'
+import type { AudioContextLike } from '~/utils/sound'
 import { concept, question } from '../unit/fixtures'
 
 export interface World {
@@ -10,6 +11,16 @@ export interface World {
   dismissals: Dismissal[]
   // 最近一次作答新達成的里程碑（放煙火）
   milestones: Milestone[]
+  // 最近一次作答的升級演出；沒有升級時是 undefined
+  plan?: CelebrationPlan
+  // 使用者設定：音效開關、系統的減少動態效果；storage 模擬瀏覽器的 localStorage
+  soundOn: boolean
+  reducedMotion: boolean
+  storage: Map<string, string>
+  // 音效播放：模擬的瀏覽器音訊、這次有沒有出聲、播放時丟出的錯誤
+  audio?: AudioContextLike
+  played?: boolean
+  soundError?: unknown
   // 畫面上正在詢問的訊息與對應題目
   prompt?: { text: string; questionId: string }
   clock: number
@@ -34,6 +45,10 @@ export function setup(world: World, region: string, title: string, count: number
   world.attempts = []
   world.dismissals = []
   world.milestones = []
+  world.plan = undefined
+  world.soundOn = true
+  world.reducedMotion = false
+  world.storage = new Map()
   world.prompt = undefined
   world.clock = 0
 }
@@ -95,6 +110,7 @@ export function answer(world: World, target: Concept, numbers: number[], correct
     })
   }
   world.milestones = newMilestones(world.map, before, progression(world))
+  world.plan = celebrationFor(world.milestones, { reducedMotion: world.reducedMotion, soundOn: world.soundOn })
 }
 
 export function dismiss(world: World, id: string) {

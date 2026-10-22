@@ -7,6 +7,7 @@ const props = defineProps<{ map: TopicMap }>()
 const emit = defineEmits<{ navigate: [conceptId: string] }>()
 
 const { attempts, wrongQuestionIds, storageError, exportFile, importFile } = useRecords()
+const { soundOn, setSoundOn } = useSound()
 const index = computed(() => questionIndex(props.map))
 const knownIds = computed(() => new Set(index.value.keys()))
 // 已下架題目的作答紀錄保留在瀏覽器（重新上架時接得回來），但不算進統計
@@ -66,6 +67,18 @@ async function onImport(event: Event) {
           </button>
         </li>
       </ul>
+
+      <h3>升級音效</h3>
+      <button
+        type="button"
+        class="switch"
+        role="switch"
+        :aria-checked="soundOn"
+        @click="setSoundOn(!soundOn)"
+      >
+        <span class="knob" aria-hidden="true" />
+        {{ soundOn ? '開：城鎮升級時播放音效' : '關：升級時不出聲' }}
+      </button>
 
       <h3>備份與轉移</h3>
       <p class="hint">紀錄只存在這個瀏覽器，清除瀏覽器資料後會消失，建議定期匯出。</p>
@@ -224,5 +237,56 @@ p {
 .message {
   margin-top: 0.5rem;
   font-size: 0.9rem;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0 0.9rem 0 0.4rem;
+  border: 2px solid #2b2633;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.knob {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: #d8d0c0;
+  transition: background 0.2s;
+}
+
+.knob::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  content: '';
+  transition: transform 0.2s;
+}
+
+.switch[aria-checked='true'] .knob {
+  background: #2f8a4f;
+}
+
+.switch[aria-checked='true'] .knob::after {
+  transform: translateX(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knob,
+  .knob::after {
+    transition: none;
+  }
 }
 </style>

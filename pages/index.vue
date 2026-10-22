@@ -38,6 +38,7 @@ const concept = computed(() => findConcept(map, focusId.value))
 
 const { isMobile } = useDevice()
 const { attempts, ready, record } = useRecords()
+const { soundOn, play } = useSound()
 useFocusHistory(focusId, tree)
 
 // 地圖／清單模式，選擇記在瀏覽器
@@ -121,9 +122,10 @@ watch(progression, (after, before) => {
   saveSnapshot()
   const plan = celebrationFor(newMilestones(map, before, after), {
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    soundOn: true,
+    soundOn: soundOn.value,
   })
   if (!plan) return
+  play(plan.sound)
   mapRef.value?.celebrate(plan)
   if (plan.confetti !== 'none') {
     const count = plan.confetti === 'many' ? 160 : 60
