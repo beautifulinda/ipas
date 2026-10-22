@@ -4,7 +4,12 @@ import { practiceQuestions } from '~/utils/concepts'
 import { DISMISS_PROMPT, latestByQuestion, resumeIndex, shouldAskDismiss, type Attempt } from '~/utils/progress'
 
 const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
-const emit = defineEmits<{ answered: [questionId: string, choice: string, correct: boolean] }>()
+// engage：使用者開始操作題目（點了或用鍵盤進入），地圖切成作答模式；position：目前是第幾題（從 1 起算）
+const emit = defineEmits<{
+  answered: [questionId: string, choice: string, correct: boolean]
+  engage: []
+  position: [n: number]
+}>()
 
 const { dismissals, dismiss, ready } = useRecords()
 const questions = computed(() => practiceQuestions(props.concept))
@@ -31,17 +36,68 @@ watch(ready, (value) => {
 watch(current, () => {
   dismissPrompt.value = undefined
 })
+watch(index, (i) => emit('position', i + 1), { immediate: true })
 
-function onAnswered(choice: string, correct: boolean) {
+const card = ref<{ focusOptions: () => void; focusFeedback: () => void }>()
+const dismissEl = ref<HTMLElement>()
+const dismissDoneEl = ref<HTMLElement>()
+
+// 鍵盤進入作答：接著上次的進度，焦點移到選項（報讀軟體會先唸出題目）
+async function focusQuestion() {
+  index.value = startIndex()
+  await nextTick()
+  card.value?.focusOptions()
+}
+defineExpose({ focusQuestion })
+
+async function goTo(i: number) {
+  if (i < 0 || i >= questions.value.length || i === index.value) return
+  index.value = i
+  await nextTick()
+  card.value?.focusOptions()
+}
+
+async function onAnswered(choice: string, correct: boolean) {
   const id = current.value.id
   // 要在記下這次作答之前判斷題目是否在錯題本裡
   dismissPrompt.value = shouldAskDismiss(id, correct, props.attempts, dismissals.value) ? 'ask' : undefined
   emit('answered', id, choice, correct)
+  // 送出按鈕會消失：有錯題本詢問就停在詢問的「移除」，否則停在作答結果，報讀軟體使用者才不會被丟回頁首
+  await nextTick()
+  if (dismissPrompt.value === 'ask') dismissEl.value?.querySelector('button')?.focus()
+  else card.value?.focusFeedback()
 }
 
 async function onDismiss() {
   await dismiss(current.value.id)
   dismissPrompt.value = 'removed'
+  await nextTick()
+  dismissDoneEl.value?.focus({ preventScroll: true })
+}
+
+async function onKeep() {
+  dismissPrompt.value = undefined
+  await nextTick()
+  card.value?.focusFeedback()
+}
+
+// 鍵盤作答（需求在 tests/features/鍵盤作答.feature）：左右鍵換題，到頭尾停住；
+// 送出後在作答結果按 Enter 到下一題；錯題本詢問用左右鍵在「移除」「先保留」之間切換
+function onKeydown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement
+  const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+  if (target.closest('.dismiss')) {
+    if (!horizontal) return
+    event.preventDefault()
+    const buttons = [...(dismissEl.value?.querySelectorAll('button') ?? [])]
+    buttons[event.key === 'ArrowLeft' ? 0 : buttons.length - 1]?.focus()
+  } else if (horizontal && target.closest('.question')) {
+    event.preventDefault()
+    goTo(index.value + (event.key === 'ArrowLeft' ? -1 : 1))
+  } else if (event.key === 'Enter' && (target.matches('.feedback') || target === dismissDoneEl.value)) {
+    event.preventDefault()
+    goTo(index.value + 1)
+  }
 }
 
 function statusOf(questionId: string) {
@@ -52,7 +108,7 @@ function statusOf(questionId: string) {
 </script>
 
 <template>
-  <section class="practice">
+  <section class="practice" @focusin="emit('engage')" @keydown="onKeydown">
     <h3>練習題</h3>
     <p v-if="!questions.length" class="empty">這個主題還沒有練習題。</p>
     <template v-else>
@@ -70,15 +126,15 @@ function statusOf(questionId: string) {
           {{ i + 1 }}
         </button>
       </nav>
-      <QuestionCard :key="current.id" :question="current" @answered="onAnswered" />
-      <div v-if="dismissPrompt === 'ask'" class="dismiss" role="group" aria-label="錯題本">
-        <p>{{ DISMISS_PROMPT }}</p>
+      <QuestionCard ref="card" :key="current.id" :question="current" @answered="onAnswered" />
+      <div v-if="dismissPrompt === 'ask'" ref="dismissEl" class="dismiss" role="group" aria-labelledby="dismiss-text">
+        <p id="dismiss-text">{{ DISMISS_PROMPT }}</p>
         <div class="dismiss-actions">
           <button type="button" class="primary" @click="onDismiss">移除</button>
-          <button type="button" @click="dismissPrompt = undefined">先保留</button>
+          <button type="button" @click="onKeep">先保留</button>
         </div>
       </div>
-      <p v-else-if="dismissPrompt === 'removed'" class="dismiss-done" role="status">已從錯題本移除。</p>
+      <p v-else-if="dismissPrompt === 'removed'" ref="dismissDoneEl" class="dismiss-done" tabindex="-1">已從錯題本移除。</p>
       <button v-if="index < questions.length - 1" type="button" class="next" @click="index++">下一題 →</button>
     </template>
   </section>
@@ -88,6 +144,10 @@ function statusOf(questionId: string) {
 h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
+}
+
+.dismiss-done:focus {
+  outline: none;
 }
 
 .empty {

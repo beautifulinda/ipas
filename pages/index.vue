@@ -3,7 +3,7 @@ import { useElementSize } from '@vueuse/core'
 import type { TopicMap } from '~/types/map'
 // 正式網站是 data/map.json；E2E 測試時換成假題庫（見 nuxt.config.ts）
 import mapData from '#map-data'
-import { findConcept } from '~/utils/concepts'
+import { findConcept, practiceQuestions } from '~/utils/concepts'
 import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
@@ -54,8 +54,12 @@ const mainEl = ref<HTMLElement>()
 const { height: mainHeight } = useElementSize(mainEl)
 const insetBottom = computed(() => (isMobile.value && concept.value ? mainHeight.value * 0.5 : 0))
 const quizOpen = ref(false)
+// 作答模式（桌面）：鍵盤在右邊的題目上，地圖放大到建築物；換主題就回到地圖模式（需求在 tests/features/鍵盤作答.feature）
+const answering = ref(false)
+const questionNumber = ref(1)
 watch(concept, () => {
   quizOpen.value = false
+  answering.value = false
 })
 // 全螢幕作答時，背景的頁首、地圖、面板、頁尾設為 inert，Tab 與報讀軟體都不會跑到後面；升級卡不在其中，照樣唸得出來
 const quizShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value))
@@ -64,7 +68,8 @@ const quizShown = computed(() => Boolean(concept.value && isMobile.value && quiz
 const progression = computed(() => computeProgression(map, attempts.value))
 // 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
 const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
-const mapRef = ref<{ celebrate: (plan: CelebrationPlan) => void }>()
+const mapRef = ref<{ celebrate: (plan: CelebrationPlan) => void; focusMap: () => void }>()
+const panelRef = ref<{ focusQuestion: () => Promise<void> }>()
 const confettiRef = ref<{ burst: (count: number) => void }>()
 
 // 升級演出（需求在 tests/features/升級演出.feature）：同時達成好幾個里程碑只演最大的那一個；
@@ -148,8 +153,26 @@ async function onStart(conceptId: string) {
     return
   }
   document.querySelector('.practice')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  // 焦點移到面板標題，報讀軟體使用者才知道面板打開了
-  document.getElementById('concept-title')?.focus({ preventScroll: true })
+  await enterAnswering()
+}
+
+// 進入作答：焦點移到題目的選項，報讀軟體會先唸出題目；主題沒有題目時不進入
+async function enterAnswering() {
+  if (!concept.value || !practiceQuestions(concept.value).length) return
+  answering.value = true
+  await panelRef.value?.focusQuestion()
+}
+
+// 在地圖的主題上按 Enter：手機開全螢幕作答，桌面進入作答模式
+async function onEnter() {
+  if (isMobile.value) quizOpen.value = true
+  else await enterAnswering()
+}
+
+// 作答中按 Esc：回到地圖模式，焦點回到地圖，報讀軟體會唸出目前的位置
+function onLeave() {
+  answering.value = false
+  mapRef.value?.focusMap()
 }
 
 function goUp() {
@@ -195,7 +218,11 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           :tree="tree"
           :progression="progression"
           :start-id="startId"
+          :answering="answering && !isMobile"
+          :question-number="questionNumber"
           @start="onStart"
+          @enter="onEnter"
+          @leave="onLeave"
           :inset-bottom="insetBottom"
           @unsupported="view = 'list'"
         />
@@ -224,9 +251,12 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           v-else
           class="panel-area"
           :concept="concept"
+          ref="panelRef"
           :attempts="attempts"
           @close="goUp"
           @answered="onAnswered"
+          @engage="answering = true"
+          @position="questionNumber = $event"
         />
       </template>
     </main>
@@ -265,7 +295,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
     <footer class="hint" :inert="quizShown">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
-      <template v-else>點擊節點放大・滾輪縮放・拖曳平移・Esc 返回上一層・方向鍵切換同層</template>
+      <template v-else>點擊節點放大・滾輪縮放・拖曳平移・方向鍵切換同層・Enter 作答・Esc 返回</template>
       <span v-if="pastPapers.length" class="copyright">{{ COPYRIGHT_NOTICE }}。</span>
     </footer>
   </div>

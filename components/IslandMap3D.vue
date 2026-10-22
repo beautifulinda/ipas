@@ -12,13 +12,22 @@ import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
 
 // insetBottom：畫面底部被其他元素（手機的 bottom sheet）擋住的高度，聚焦時改對準上方可見範圍
 // startId：建議從這裡開始的城鎮，標籤上方顯示「從這裡開始」
+// answering：正在作答目前這個主題（鍵盤在右邊的題目上），questionNumber 是第幾題；地圖放大到建築物並顯示提示
 const props = withDefaults(
-  defineProps<{ tree: MapNode; progression: Progression; startId?: string; insetBottom?: number }>(),
-  { startId: undefined, insetBottom: 0 },
+  defineProps<{
+    tree: MapNode
+    progression: Progression
+    startId?: string
+    insetBottom?: number
+    answering?: boolean
+    questionNumber?: number
+  }>(),
+  { startId: undefined, insetBottom: 0, answering: false, questionNumber: 1 },
 )
 const focusId = defineModel<string>('focusId', { required: true })
 // start：點了「從這裡開始」，要直接開始練習那個主題
-const emit = defineEmits<{ unsupported: []; start: [conceptId: string] }>()
+// enter：在主題上按 Enter，進入作答；leave：作答中按 Esc，回到地圖模式（需求在 tests/features/鍵盤作答.feature）
+const emit = defineEmits<{ unsupported: []; start: [conceptId: string]; enter: [conceptId: string]; leave: [] }>()
 
 // 鏡頭：固定的斜俯視角度，旋轉鎖住
 const FOV = 32
@@ -41,7 +50,7 @@ const layout = computed(() => buildWorld(props.tree, portrait.value))
 
 // 文字標籤：「從這裡開始」最優先、不受鏡頭所在的島限制；島名、地區名一律列出，城鎮名只列目前這座島的；
 // 實際顯示與否由每格畫面的避讓排版決定
-type LabelKind = 'start' | 'island' | 'region' | 'town'
+type LabelKind = 'start' | 'answering' | 'island' | 'region' | 'town'
 interface Label {
   key: string
   anchor: string
@@ -50,8 +59,14 @@ interface Label {
   // 城鎮的答對比例（0～1），畫成進度圓餅
   progress?: { ratio: number; text: string }
 }
+// 作答中只顯示「作答中」的提示，不顯示「從這裡開始」
+const answeringHere = computed(() => props.answering && focusNode.value.depth === 3)
 const labels = computed<Label[]>(() => [
-  ...(props.startId ? [{ key: `start:${props.startId}`, anchor: props.startId, kind: 'start' as const, text: '從這裡開始' }] : []),
+  ...(answeringHere.value
+    ? [{ key: `answering:${focusId.value}`, anchor: focusId.value, kind: 'answering' as const, text: `作答中：第 ${props.questionNumber} 題・請看右邊的題目` }]
+    : props.startId
+      ? [{ key: `start:${props.startId}`, anchor: props.startId, kind: 'start' as const, text: '從這裡開始' }]
+      : []),
   ...layout.value.islands.map((i) => ({ key: i.id, anchor: i.id, kind: 'island' as const, text: i.data.title })),
   ...layout.value.regions.map((r) => ({ key: r.id, anchor: r.id, kind: 'region' as const, text: r.data.title })),
   ...layout.value.towns
@@ -71,6 +86,12 @@ const labels = computed<Label[]>(() => [
 // 螢幕閱讀器與鍵盤用：目前這一層可以前往的位置
 const navTargets = computed(() => focusNode.value.children?.map((c) => c.data) ?? [])
 const startTitle = computed(() => layout.value.towns.find((t) => t.id === props.startId)?.data.title)
+// 按 Esc 回到地圖時焦點移到地圖上，報讀軟體會唸出目前的位置
+const mapLabel = computed(
+  () => `主題地圖（3D 島嶼），目前在「${focusNode.value.data.title}」。可用下方的導覽按鈕、方向鍵、Enter 與 Esc 操作，或切換到清單模式。`,
+)
+// 給 E2E 檢查鏡頭對準哪裡：town:主題ID 表示放大到建築物
+const viewKey = computed(() => (answeringHere.value ? `town:${focusId.value}` : focusId.value))
 
 let renderer: THREE.WebGLRenderer | undefined
 let camera: THREE.PerspectiveCamera
@@ -109,6 +130,12 @@ function flyToFocus(animate: boolean) {
   if (!renderer || !world) return
   const box = world.bounds.get(focusNode.value.data.id) ?? world.bounds.get('root')!
   const to = viewFor(box)
+  // 作答中放大到建築物：對準城鎮，距離拉近到一半左右
+  if (answeringHere.value) {
+    const town = world.townPosition(focusNode.value.data.id).setY(10)
+    to[0] = town.clone().add(to[0].clone().sub(to[1]).multiplyScalar(0.5))
+    to[1] = town
+  }
   if (!animate || reduceMotion()) {
     camera.position.copy(to[0])
     controls.target.copy(to[1])
@@ -175,6 +202,8 @@ function onPointerDown(event: PointerEvent) {
 function onPointerUp(event: PointerEvent) {
   if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 6) return
   downAt = undefined
+  // 作答中點了地圖：回到地圖模式，再照一般的點擊處理
+  if (props.answering) emit('leave')
   const hitId = pick(event)
   if (!hitId) return goUp()
   const target = resolveTarget(hitId)
@@ -199,10 +228,25 @@ function goSibling(step: number) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  // 題目已經處理過的按鍵（換選項、換題）不再處理；換題時舊的選項可能已經從畫面移除，認不出它原本在面板裡
+  if (event.defaultPrevented) return
   const target = event.target
+  // 作答中按 Esc：回到地圖模式，停在同一個主題；再按一次才回上一層
+  if (event.key === 'Escape' && props.answering) {
+    emit('leave')
+    return
+  }
   // 在輸入框或面板（data-no-map-keys）裡按鍵時，不切換地圖；在面板裡按 Esc 一樣回到上一層
   if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"], [data-no-map-keys]')) {
     if (event.key !== 'Escape' || !target.closest('[data-no-map-keys]')) return
+  }
+  // 在主題上按 Enter 進入作答；焦點在按鈕或連結上時，Enter 是按那個按鈕
+  if (event.key === 'Enter') {
+    if (focusNode.value.depth === 3 && !(target instanceof Element && target.closest('button, a'))) {
+      event.preventDefault()
+      emit('enter', focusNode.value.data.id)
+    }
+    return
   }
   if (event.key === 'Escape') goUp()
   else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
@@ -237,7 +281,8 @@ function placeLabels() {
   for (const el of elements) {
     const key = el.dataset.anchor!
     const kind = el.dataset.kind as LabelKind
-    const anchor = kind === 'start' ? world.townPosition(key) : world.anchors.get(key)
+    const above = kind === 'start' || kind === 'answering'
+    const anchor = above ? world.townPosition(key) : world.anchors.get(key)
     const bw = el.offsetWidth
     const bh = el.offsetHeight
     let visible = false
@@ -245,7 +290,7 @@ function placeLabels() {
       const s = toScreen(anchor)
       let candidates: [number, number][] = []
       // 「從這裡開始」放在城鎮正上方；島名的錨點在島的最後緣，標籤整個放在錨點上方
-      if (kind === 'start') candidates = [[s.x, s.y - 44 - bh / 2]]
+      if (above) candidates = [[s.x, s.y - (kind === 'answering' ? 64 : 44) - bh / 2]]
       else if (kind === 'island') candidates = [[s.x, s.y - bh / 2 - 6]]
       else if (kind === 'region') {
         // 地區在畫面上太小時不顯示名稱；換位置時不能離開地區範圍，免得看不出是哪個地區
@@ -271,7 +316,7 @@ function placeLabels() {
         for (const [cx, cy] of candidates) {
           const box: Box = [cx - bw / 2 - 3, cy - bh / 2 - 3, cx + bw / 2 + 3, cy + bh / 2 + 3]
           const offscreen = box[2] < 0 || box[0] > w || box[3] < 0 || box[1] > h
-          if (offscreen || (kind !== 'island' && kind !== 'start' && placed.some((p) => overlaps(box, p)))) continue
+          if (offscreen || (kind !== 'island' && !above && placed.some((p) => overlaps(box, p)))) continue
           placed.push(box)
           el.style.transform = `translate(${cx - bw / 2}px, ${cy - bh / 2}px)`
           visible = true
@@ -280,6 +325,12 @@ function placeLabels() {
       }
     }
     el.style.visibility = visible ? 'visible' : 'hidden'
+    // 錨點在畫面上的位置，E2E 用來模擬滑鼠點城鎮
+    if (kind === 'town') {
+      const s = toScreen(world.townPosition(key))
+      el.dataset.x = String(Math.round(s.x))
+      el.dataset.y = String(Math.round(s.y))
+    }
   }
 }
 
@@ -402,7 +453,10 @@ function celebrate(plan: CelebrationPlan) {
     showcase = { t: 0, from: [camera.position.clone(), controls.target.clone()], center: base.clone().add(new THREE.Vector3(0, 12, 0)) }
   }
 }
-defineExpose({ celebrate })
+function focusMap() {
+  canvasEl.value?.focus({ preventScroll: true })
+}
+defineExpose({ celebrate, focusMap })
 
 onMounted(() => {
   try {
@@ -470,6 +524,7 @@ watch(focusNode, () => {
   showcase = undefined
   flyToFocus(true)
 })
+watch(answeringHere, () => flyToFocus(true))
 watch([width, height], () => {
   applyViewport()
   flyToFocus(false)
@@ -492,12 +547,13 @@ watch(
 </script>
 
 <template>
-  <div ref="wrapperEl" class="map3d">
+  <div ref="wrapperEl" class="map3d" :data-mode="answeringHere ? 'answering' : 'map'" :data-view="viewKey">
     <canvas
       ref="canvasEl"
       class="canvas"
       role="img"
-      aria-label="主題地圖（3D 島嶼）。可用下方的導覽按鈕、方向鍵與 Esc 操作，或切換到清單模式。"
+      tabindex="-1"
+      :aria-label="mapLabel"
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
       @pointermove="onPointerMove"
@@ -540,6 +596,10 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.canvas:focus {
+  outline: none;
 }
 
 .canvas {
@@ -614,6 +674,27 @@ watch(
   color: #fff;
   font-size: 14px;
   animation: bob 1.6s ease-in-out infinite;
+}
+
+.tag--answering {
+  z-index: 1;
+  padding: 0.25rem 0.8rem;
+  border-color: #1f3f8f;
+  /* 白字要有 4.5:1 的對比 */
+  background: #2f5fd0;
+  color: #fff;
+  font-size: 14px;
+}
+
+.tag--answering::after {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  border: 7px solid transparent;
+  border-top-color: #1f3f8f;
+  border-bottom: 0;
+  content: '';
+  transform: translateX(-50%);
 }
 
 .tag--start::after {

@@ -4,7 +4,15 @@ import type { Attempt } from '~/utils/progress'
 
 // 桌面版：右側面板，地圖保持可見
 defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
-const emit = defineEmits<{ close: []; answered: [questionId: string, choice: string, correct: boolean] }>()
+const emit = defineEmits<{
+  close: []
+  answered: [questionId: string, choice: string, correct: boolean]
+  engage: []
+  position: [n: number]
+}>()
+
+const practice = ref<{ focusQuestion: () => Promise<void> }>()
+defineExpose({ focusQuestion: () => practice.value?.focusQuestion() })
 
 function onAnswered(questionId: string, choice: string, correct: boolean) {
   emit('answered', questionId, choice, correct)
@@ -18,7 +26,14 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       <button type="button" class="close" aria-label="關閉" @click="emit('close')">✕</button>
     </header>
     <ConceptSummary :concept="concept" />
-    <PracticeSection :concept="concept" :attempts="attempts" @answered="onAnswered" />
+    <PracticeSection
+      ref="practice"
+      :concept="concept"
+      :attempts="attempts"
+      @answered="onAnswered"
+      @engage="emit('engage')"
+      @position="emit('position', $event)"
+    />
   </aside>
 </template>
 

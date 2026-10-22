@@ -2,7 +2,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page } from '@playwright/test'
 import { createBdd } from 'playwright-bdd'
-import { conceptByTitle, conceptId } from './fixture'
+import { currentQuestion, gotoConcept } from './fixture'
 
 const { Given, When, Then, Before } = createBdd()
 
@@ -19,21 +19,8 @@ const background = (page: Page) => [page.locator('.layout > header'), page.locat
 const startButton = (page: Page) => page.getByRole('button', { name: '開始練習', exact: true })
 const quiz = (page: Page) => page.getByRole('dialog')
 
-// 從畫面上的題目文字找回假題庫裡的那一題，才知道哪個是正確答案
-async function currentQuestion(page: Page) {
-  const stem = await page.getByText(/^測試題：.+ 第 \d+ 題$/).first().textContent()
-  const [, title, n] = stem!.match(/^測試題：(.+) 第 (\d+) 題$/)!
-  return conceptByTitle(title).questions[Number(n) - 1]
-}
-
 // Safari／WebKit 預設按 Tab 只會移到輸入框與連結，要按 Option+Tab 才會移到按鈕
 const tabKey = (browserName: string) => (browserName === 'webkit' ? 'Alt+Tab' : 'Tab')
-
-// 背景已經打開首頁；等網站初始化完（會用 vue-router 更新網址）再換網址，否則 page.goto 會被打斷
-async function gotoConcept(page: Page, title: string) {
-  await page.waitForLoadState('networkidle')
-  await page.goto(`./?at=${conceptId(title)}`)
-}
 
 async function openQuizWithKeyboard(page: Page, title: string) {
   await gotoConcept(page, title)
@@ -47,8 +34,18 @@ When('我用鍵盤移到「從這裡開始」並按 Enter', async ({ page }) => 
   await page.keyboard.press('Enter')
 })
 
-Then(/^焦點停在「(.+)」的主題標題上$/, async ({ page }, title: string) => {
-  await expect(page.getByRole('heading', { name: title, level: 2 })).toBeFocused()
+Then('每個選項都是單選按鈕', async ({ page }) => {
+  const question = await currentQuestion(page)
+  await expect(page.getByRole('radiogroup', { name: '選項' }).getByRole('radio')).toHaveCount(question.options.length)
+})
+
+Then('報讀軟體進到選項時會先唸出題目', async ({ page }) => {
+  const question = await currentQuestion(page)
+  await expect(page.getByRole('radiogroup', { name: '選項' })).toHaveAccessibleDescription(question.stem)
+})
+
+Then(/^焦點停在地圖上，報讀軟體唸出目前在「(.+)」$/, async ({ page }, title: string) => {
+  await expect(page.getByRole('img', { name: new RegExp(`目前在「${title}」`) })).toBeFocused()
 })
 
 Given(/^地圖正在顯示「(.+)」$/, async ({ page }, title: string) => {
@@ -77,9 +74,9 @@ Given(/^畫面正在顯示「(.+)」的第 (\d+) 題$/, async ({ page, isMobile 
 When(/^我(?:用鍵盤)?選(正確|錯誤)答案並送出$/, async ({ page }, which: string) => {
   const question = await currentQuestion(page)
   const option = question.options.find((o) => (o.id === question.answer) === (which === '正確'))!
-  await page.getByRole('group', { name: '選項' }).getByRole('button', { name: `${option.id} ${option.text}` }).focus()
-  await page.keyboard.press('Enter')
-  await page.getByRole('button', { name: '送出答案' }).focus()
+  // 空白鍵選答案、Enter 送出（單選題的鍵盤操作，見〈鍵盤作答〉）
+  await page.getByRole('radiogroup', { name: '選項' }).getByRole('radio', { name: `${option.id} ${option.text}` }).focus()
+  await page.keyboard.press('Space')
   await page.keyboard.press('Enter')
 })
 
@@ -94,7 +91,7 @@ Then(/^再按一次 Tab，焦點移到「下一題」$/, async ({ page, browserN
 
 When(/^我還沒選答案就用鍵盤移到「送出答案」$/, async ({ page, browserName }) => {
   // 從最後一個選項往下按 Tab；送出按鈕不能按時會被略過
-  await page.getByRole('group', { name: '選項' }).getByRole('button').last().focus()
+  await page.getByRole('radiogroup', { name: '選項' }).getByRole('radio').last().focus()
   await page.keyboard.press(tabKey(browserName))
 })
 
@@ -146,7 +143,7 @@ When(/^我答對第 (\d+) 題$/, async ({ page }, n: string) => {
   const question = await currentQuestion(page)
   expect(question.stem).toMatch(new RegExp(` 第 ${n} 題$`))
   const option = question.options.find((o) => o.id === question.answer)!
-  await page.getByRole('group', { name: '選項' }).getByRole('button', { name: `${option.id} ${option.text}` }).click()
+  await page.getByRole('radiogroup', { name: '選項' }).getByRole('radio', { name: `${option.id} ${option.text}` }).click()
   await page.getByRole('button', { name: '送出答案' }).click()
 })
 

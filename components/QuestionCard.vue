@@ -17,15 +17,54 @@ const selected = ref<string>()
 const submitted = ref(false)
 const correct = computed(() => selected.value === props.question.answer)
 const feedbackEl = ref<HTMLElement>()
+const optionEls = ref<HTMLButtonElement[]>([])
+// 還沒選答案就按 Enter 時的提示
+const hint = ref('')
+const stemId = computed(() => `stem-${props.question.id}`)
+// 單選題的鍵盤操作：整組選項只有一個能用 Tab 移到（選了的那個，還沒選就是第一個）
+const tabStop = computed(() => Math.max(props.question.options.findIndex((o) => o.id === selected.value), 0))
 
-async function submit() {
+function choose(id: string) {
+  selected.value = id
+  hint.value = ''
+}
+
+// 送出後焦點移到哪裡由 PracticeSection 決定（作答結果或錯題本詢問）
+function submit() {
   if (!selected.value || submitted.value) return
   submitted.value = true
   emit('answered', selected.value, correct.value)
-  // 送出按鈕會消失，焦點移到回饋，報讀軟體使用者才不會被丟回頁首
-  await nextTick()
+}
+
+// 鍵盤作答（需求在 tests/features/鍵盤作答.feature）：上下鍵選答案、Enter 送出；左右鍵換題交給 PracticeSection
+function onOptionsKeydown(event: KeyboardEvent) {
+  if (submitted.value) return
+  const options = props.question.options
+  const current = options.findIndex((o) => o.id === selected.value)
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    // 還沒選時按上下鍵都先選第一個；到頭尾時停住
+    const next = current < 0 ? 0 : Math.min(Math.max(current + (event.key === 'ArrowDown' ? 1 : -1), 0), options.length - 1)
+    choose(options[next].id)
+    optionEls.value[next]?.focus()
+  } else if (event.key === 'Enter') {
+    // 攔下 Enter，免得按鈕把它當成點選
+    event.preventDefault()
+    if (selected.value) submit()
+    else hint.value = '請先選一個答案'
+  }
+}
+
+function focusOptions() {
+  if (submitted.value) feedbackEl.value?.focus({ preventScroll: true })
+  else optionEls.value[tabStop.value]?.focus()
+}
+
+function focusFeedback() {
   feedbackEl.value?.focus({ preventScroll: true })
 }
+
+defineExpose({ focusOptions, focusFeedback })
 
 function optionState(id: string) {
   if (!submitted.value) return selected.value === id ? 'selected' : ''
@@ -37,25 +76,30 @@ function optionState(id: string) {
 <template>
   <div class="question">
     <p class="badge" :class="{ past: isPastPaper(question) }">{{ sourceBadge(question) }}</p>
-    <p class="stem">{{ question.stem }}</p>
+    <p :id="stemId" class="stem">{{ question.stem }}</p>
     <p v-if="sourceLabel(question)" class="source">
       {{ sourceLabel(question) }}・<a :href="PAST_PAPERS_URL" target="_blank" rel="noopener">{{ PAST_PAPERS_LINK_TEXT }}</a>
     </p>
-    <div class="options" role="group" aria-label="選項">
+    <!-- 報讀軟體進到選項時，會先唸出題目（aria-describedby） -->
+    <div class="options" role="radiogroup" aria-label="選項" :aria-describedby="stemId" @keydown="onOptionsKeydown">
       <button
-        v-for="option in question.options"
+        v-for="(option, i) in question.options"
         :key="option.id"
+        ref="optionEls"
         type="button"
+        role="radio"
         class="option"
         :class="optionState(option.id)"
-        :aria-pressed="selected === option.id"
+        :aria-checked="selected === option.id"
+        :tabindex="i === tabStop ? 0 : -1"
         :disabled="submitted"
-        @click="selected = option.id"
+        @click="choose(option.id)"
       >
         <span class="option-id">{{ option.id }}</span>
         <span>{{ option.text }}</span>
       </button>
     </div>
+    <p v-if="hint" class="hint" role="status">{{ hint }}</p>
 
     <button v-if="!submitted" type="button" class="submit" :disabled="!selected" @click="submit">送出答案</button>
 
@@ -158,6 +202,12 @@ function optionState(id: string) {
 .option.wrong {
   border-color: #d9534f;
   background: #fdeceb;
+}
+
+.hint {
+  margin: 0.5rem 0 0;
+  color: #9a3412;
+  font-weight: 700;
 }
 
 .submit {
