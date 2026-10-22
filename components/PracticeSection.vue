@@ -1,27 +1,33 @@
 <script setup lang="ts">
 import type { Concept } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
-import { DISMISS_PROMPT, latestByQuestion, shouldAskDismiss, type Attempt } from '~/utils/progress'
+import { DISMISS_PROMPT, latestByQuestion, resumeIndex, shouldAskDismiss, type Attempt } from '~/utils/progress'
 
 const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
 const emit = defineEmits<{ answered: [questionId: string, choice: string, correct: boolean] }>()
 
-const { dismissals, dismiss } = useRecords()
+const { dismissals, dismiss, ready } = useRecords()
 const questions = computed(() => practiceQuestions(props.concept))
-const index = ref(0)
+// 打開主題時接著上次的進度：第一題還沒作答的題目（需求在 tests/features/繼續作答.feature）
+const startIndex = () => resumeIndex(questions.value.map((q) => q.id), [...props.attempts])
+const index = ref(startIndex())
 const current = computed(() => questions.value[index.value])
 const latest = computed(() => latestByQuestion([...props.attempts]))
 
 // 錯題本的題目答對時，詢問是否移除；不回答或換題就當作先保留
 const dismissPrompt = ref<'ask' | 'removed'>()
 
-// 換概念時從第一題開始
+// 換主題時重新決定從哪一題開始；作答中不會自動跳題
 watch(
   () => props.concept.id,
   () => {
-    index.value = 0
+    index.value = startIndex()
   },
 )
+// 重新整理網頁時，作答紀錄可能在主題打開後才載入完成，載入後再跳到上次的進度
+watch(ready, (value) => {
+  if (value) index.value = startIndex()
+})
 watch(current, () => {
   dismissPrompt.value = undefined
 })

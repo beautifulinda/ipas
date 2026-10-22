@@ -191,3 +191,12 @@ export function newAttempts(existing: Omit<Attempt, 'id'>[], incoming: Omit<Atte
 export function newDismissals(existing: Omit<Dismissal, 'id'>[], incoming: Omit<Dismissal, 'id'>[]) {
   return onlyNew(existing, incoming, (d) => `${d.questionId}@${d.dismissedAt}`)
 }
+
+// 打開主題時停在哪一題（從 0 起算）：第一題還沒作答的；全部作答過就停在第一題最近答錯的；全部答對回到第 1 題。
+// 需求在 tests/features/繼續作答.feature
+export function resumeIndex(questionIds: string[], attempts: Attempt[]) {
+  const latest = latestByQuestion(attempts)
+  const unanswered = questionIds.findIndex((id) => !latest.has(id))
+  if (unanswered >= 0) return unanswered
+  return Math.max(questionIds.findIndex((id) => !latest.get(id)?.correct), 0)
+}

@@ -23,6 +23,8 @@ export interface World {
   soundError?: unknown
   // 畫面上正在詢問的訊息與對應題目
   prompt?: { text: string; questionId: string }
+  // 打開主題時畫面停在第幾題（從 1 起算）
+  resume?: number
   clock: number
 }
 
@@ -50,6 +52,7 @@ export function setup(world: World, region: string, title: string, count: number
   world.reducedMotion = false
   world.storage = new Map()
   world.prompt = undefined
+  world.resume = undefined
   world.clock = 0
 }
 

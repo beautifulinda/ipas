@@ -18,6 +18,7 @@ export default defineConfig({
       'tests/features/feedback.steps.ts',
       'tests/features/pastPapers.steps.ts',
       'tests/features/celebration.steps.ts',
+      'tests/features/resume.steps.ts',
     ],
   },
 })
