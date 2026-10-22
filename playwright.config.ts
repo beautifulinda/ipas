@@ -15,6 +15,9 @@ const PORT = 4174
 export default defineConfig({
   testDir,
   forbidOnly: !!process.env.CI,
+  // CI 機器沒有顯示卡，3D 地圖用軟體算繪，每格畫面都慢，按鍵反應跟著變慢；只在 CI 放寬等待時間
+  timeout: process.env.CI ? 60_000 : 30_000,
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
