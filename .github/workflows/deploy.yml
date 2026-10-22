@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# 同一個分支有新的推送時，取消還在跑的舊流程；避免舊版比新版晚部署，把網站蓋回舊版
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # 題庫檢查、型別檢查、單元測試；任何一項失敗就不部署
   check:
@@ -98,9 +103,10 @@ jobs:
     permissions:
       pages: write
       id-token: write
+    # 部署本身不中途取消，避免 Pages 停在部署一半的狀態
     concurrency:
       group: pages
-      cancel-in-progress: true
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
