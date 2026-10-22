@@ -2,7 +2,8 @@ import type { TopicMap } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import { latestByQuestion, type Attempt } from '~/utils/progress'
 
-// 城鎮等級：0 工地（還沒練習）、1 帳篷（作答過）、2 房子（半數以上最近一次答對）、3 城堡（全部最近一次答對）
+// 城鎮等級：0 工地（還沒答對任何一題，全部答錯也算）、1 帳篷（至少答對 1 題但不到一半）、
+// 2 房子（半數以上最近一次答對）、3 城堡（全部最近一次答對）。作者 2026-10-22 決定全錯維持工地
 export type TownLevel = 0 | 1 | 2 | 3
 
 export const TOWN_LEVEL_NAMES: Record<TownLevel, string> = {
@@ -22,6 +23,8 @@ export interface Progression {
   townLevels: Map<string, TownLevel>
   // 只有已有題目的概念才有進度
   townProgress: Map<string, TownProgress>
+  // 作答過（不論對錯）的城鎮；「從這裡開始」跳過這些城鎮
+  practicedTowns: Set<string>
   // 地區有任何一題作答過，雲霧就散開
   exploredRegions: Set<string>
   // 地區裡的概念全部升到城堡，插上旗子
@@ -42,6 +45,7 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
   const result: Progression = {
     townLevels: new Map(),
     townProgress: new Map(),
+    practicedTowns: new Set(),
     exploredRegions: new Set(),
     flaggedRegions: new Set(),
     litIslands: new Set(),
@@ -59,11 +63,14 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
         let level: TownLevel = 0
         if (questions.length && correct.length === questions.length) level = 3
         else if (questions.length && correct.length * 2 >= questions.length) level = 2
-        else if (answered.length) level = 1
+        else if (correct.length) level = 1
         result.townLevels.set(concept.id, level)
         if (questions.length) result.townProgress.set(concept.id, { correct: correct.length, total: questions.length })
 
-        if (answered.length) result.exploredRegions.add(category.id)
+        if (answered.length) {
+          result.practicedTowns.add(concept.id)
+          result.exploredRegions.add(category.id)
+        }
         if (level < 3) regionComplete = false
       }
       if (regionComplete) result.flaggedRegions.add(category.id)
@@ -79,7 +86,7 @@ export function recommendedStart(map: TopicMap, progression: Progression) {
   for (const subject of map.subjects) {
     for (const category of subject.categories) {
       for (const concept of category.concepts) {
-        if (progression.townProgress.has(concept.id) && progression.townLevels.get(concept.id) === 0) return concept.id
+        if (progression.townProgress.has(concept.id) && !progression.practicedTowns.has(concept.id)) return concept.id
       }
     }
   }

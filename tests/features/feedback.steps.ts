@@ -47,8 +47,8 @@ Given('三個主題都還沒有題目', (world: World) => {
   for (const c of world.map.subjects[0].categories[0].concepts) c.questions = []
 })
 
-When(/^我答錯「(.+)」的第 (\d+) 題$/, (world: World, title, n) => {
-  answer(world, findConcept(world, title), [Number(n)], false)
+When(/^我答(對|錯)「(.+)」的第 (\d+) 題$/, (world: World, result, title, n) => {
+  answer(world, findConcept(world, title), [Number(n)], result === '對')
 })
 
 When(/^我作答過「(.+)」和「(.+)」$/, (world: World, a, b) => {

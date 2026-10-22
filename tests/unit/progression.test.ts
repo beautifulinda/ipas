@@ -9,11 +9,25 @@ describe('computeProgression：城鎮等級', () => {
     expect(progression.exploredRegions.size).toBe(0)
   })
 
-  it('作答過但答對不到一半是帳篷，雲霧散開', () => {
+  it('全部答錯仍是工地，但雲霧散開', () => {
     const progression = computeProgression(sampleMap(), [attempt('q1', false)])
-    expect(progression.townLevels.get('K1')).toBe(1)
+    expect(progression.townLevels.get('K1')).toBe(0)
+    expect(progression.practicedTowns.has('K1')).toBe(true)
     expect(progression.exploredRegions.has('C1')).toBe(true)
     expect(progression.exploredRegions.has('C2')).toBe(false)
+  })
+
+  it('至少答對 1 題但不到一半是帳篷', () => {
+    const map = sampleMap()
+    map.subjects[0].categories[0].concepts[0].questions.push(question('q1b'))
+    const progression = computeProgression(map, [attempt('q1', true), attempt('q2', false)])
+    expect(progression.townLevels.get('K1')).toBe(1)
+  })
+
+  it('帳篷的題目後來全部答錯，降回工地', () => {
+    const map = sampleMap()
+    map.subjects[0].categories[0].concepts[0].questions.push(question('q1b'))
+    expect(computeProgression(map, [attempt('q1', true), attempt('q1', false)]).townLevels.get('K1')).toBe(0)
   })
 
   it('半數以上最近一次答對是房子', () => {

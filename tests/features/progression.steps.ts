@@ -85,6 +85,6 @@ Then(/^不會另外顯示「(.+)」$/, (world: World, text) => {
   expect(texts(world.milestones)).not.toContain(text)
 })
 
-Then('不會再放一次煙火', (world: World) => {
+Then(/^不會(?:再)?放(?:一次)?煙火$/, (world: World) => {
   expect(world.milestones).toEqual([])
 })
