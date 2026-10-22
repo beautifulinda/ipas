@@ -93,6 +93,15 @@ function optionState(id: string) {
 
 .source a {
   color: inherit;
+  /* 連結文字整段一起換行，不會剩一個字掉到下一行 */
+  white-space: nowrap;
+}
+
+/* 觸控裝置：出處連結的可點範圍加高到 44px；行內元素的上下 padding 不會撐開行高，畫面不變 */
+@media (pointer: coarse) {
+  .source a {
+    padding-block: 14px;
+  }
 }
 
 .options {
