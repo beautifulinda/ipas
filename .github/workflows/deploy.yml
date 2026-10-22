@@ -15,12 +15,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 比對所有提交裡有沒有考古題的題目文字
+          fetch-depth: 0
+      # 官方公告試題放在私人 repo；PR 只檢查公開內容，部署前一定要讀得到
+      - name: 讀取私人題庫
+        id: private
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: beautifulinda/ipas-past-papers
+          path: data/private
+          ssh-key: ${{ secrets.PAST_PAPERS_DEPLOY_KEY }}
+      - name: 讀不到私人題庫就不部署
+        if: steps.private.outcome == 'failure'
+        run: |
+          echo "::error::讀不到私人題庫：請確認部署金鑰 PAST_PAPERS_DEPLOY_KEY 仍有效。網站維持上一版。"
+          exit 1
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run validate
+      - name: 題庫檢查
+        run: npm run validate -- ${{ github.event_name != 'pull_request' && '--require-private' || '' }}
       - run: npm run typecheck
       - run: npm test
 
@@ -30,9 +49,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 讀取私人題庫
+        uses: actions/checkout@v4
+        with:
+          repository: beautifulinda/ipas-past-papers
+          path: data/private
+          ssh-key: ${{ secrets.PAST_PAPERS_DEPLOY_KEY }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run generate

@@ -76,16 +76,21 @@
 
 ## 題目來源原則
 
-- 題目由作者依官方公開的評鑑範圍與學習指引自行撰寫，可使用 LLM 輔助產生草稿，所有題目皆經人工審核後才納入題庫。
-- 不轉載、不改寫官方樣題或考題；如需引用，僅提供官方頁面連結。iPAS 能力鑑定小組回覆，公開之考試樣題及公開考題僅供個人學習及教學參考，不得重製、改作或作為營利用途。公開網站只包含自行撰寫並審核過的題目（作者本機練習用的官方公告試題不在 repo 內）。
+- 網站有兩種題目，每題都會標示：
+  - **官方公告試題**：iPAS 公告的歷屆試題（目前 4 個梯次、400 題），每題標示出處（梯次、考科、題號）並連到 [iPAS 官網學習資源頁](https://ipd.nat.gov.tw/ipas/certification/AIAP/learning-resources)。題目全文照官方公告，不改作，也不轉載他人撰寫的解析；沒有解析的題目顯示「答案依 iPAS 官方公告」。
+  - **自編題**：作者依官方公開的評鑑範圍與學習指引自行撰寫，可使用 LLM 輔助產生草稿，所有題目皆經人工審核後才納入題庫。
+- 公開官方公告試題的依據：iPAS 能力鑑定小組 2026-10-21 回信，網站不收費、無廣告，每題註明梯次與出處並附連結，在符合著作權法合理使用的前提下「原則上不予限制」。
+- 試題著作權屬經濟部產業人才能力鑑定（iPAS），僅供個人學習練習，不得重製或作為營利用途。官方要求時立即下架。
+- 官方公告試題不放在這個公開 repo，而是放在私人 repo，部署時由 GitHub Actions 讀入；部署前會比對這個 repo 的所有檔案與提交，確認沒有任何一題的題目文字。
+- 同一題在不同場次考過時只出現一次，出處列出每一次並標示「考過 N 次」。
 - 科目、分類與概念的資料來源為經濟部產業人才能力鑑定（iPAS）官網〈AI 應用規劃師能力鑑定 評鑑內容範圍參考〉（115.02 更新）。
-- 每題標註來源類型（`original` 或 `official-link`）。
+- 每題標註來源類型（`original`、`official-link` 或 `official-past`）。
 
 ## 與 AI 協作的方式
 
 本專案以 Claude Code 協作開發，提交紀錄中的 `Co-Authored-By` 即為標示。程式實作主要由 Claude Code 撰寫，作者負責需求、設計決策、審查與驗收：
 
-- 需求、設計方向與取捨由作者決定，例如地圖從 SVG 改為 3D、題庫分類採官方 115.02 版評鑑範圍、考古題只在本機練習。
+- 需求、設計方向與取捨由作者決定，例如地圖從 SVG 改為 3D、題庫分類採官方 115.02 版評鑑範圍、官方公告試題確認授權後才公開（並放在私人 repo）。
 - 決策與脈絡寫在 [`CLAUDE.md`](CLAUDE.md)，每次開工時 AI 依此執行，避免偏離已確定的方向；新的決策會附上日期記回檔案。
 - 練習題可由 LLM 產生草稿，但必須經作者逐題審核答案與解析（`npm run review`），CI 會擋下未審核的題目。
 - 涉及授權與法規的判斷（例如官方試題能否公開）不由 AI 推定，而是查證來源並向主辦單位書面確認。
@@ -107,7 +112,7 @@
 ## 系統架構
 
 ```
-[題庫 JSON] ──> [GitHub Actions：題庫檢查、型別檢查、單元測試] ──> [nuxt generate] ──> [GitHub Pages]
+[題庫 JSON]＋[私人 repo：官方公告試題] ──> [GitHub Actions：題庫檢查、型別檢查、測試] ──> [nuxt generate] ──> [GitHub Pages]
                                                                                      │
                                                          （Phase 2）[Supabase：匿名答題統計、題目回報]
 ```
@@ -171,7 +176,6 @@ Subject（科目）
 
 - [ ] 模擬考模式
 - [ ] LLM 輔助出題流程，含答案與出處自動驗證
-- [ ] 贊助連結（GitHub Sponsors 或贊助平台）
 
 ## 本機開發
 
@@ -186,7 +190,14 @@ npm start          # 產生靜態網站並在 http://localhost:4173/ipas/ 預覽
 npm test           # 單元測試與需求測試（Vitest）
 ```
 
-本機的 `npm start` 與 `npm run dev` 會載入 `data/private/` 的官方公告試題（若檔案存在），公開部署的網站不含這些題目。
+官方公告試題放在私人 repo `ipas-past-papers`，本機 clone 到 `data/private/`（已列入 `.gitignore`）。檔案存在時，`npm run dev`、`npm start` 與 `npm run validate` 會一併載入與檢查；不存在時網站只有自編題。
+
+新增一個梯次的試題：
+
+1. 用 markitdown 把官方 PDF 轉成 Markdown，放進試題資料夾。
+2. 執行 `node scripts/import-past-papers.mjs <試題資料夾> data/private/past-papers.concepts.json`，輸出 `data/private/past-papers.json`；新題目在概念對照檔補上所屬主題。
+3. 執行 `npm run validate`，確認出處、考科與主題對得上。
+4. 在 `data/private/` 裡 commit 並推送到私人 repo，再重新執行部署（GitHub Actions 的 workflow_dispatch）。
 
 ## 授權
 

@@ -10,5 +10,5 @@ dist
 .DS_Store
 *.log
 
-# 官方考古題只供本機練習，不可進 git 或公開部署
+# 官方公告試題放在私人 repo ipas-past-papers（本機 clone 到這裡），不可進公開 repo
 data/private/

@@ -36,18 +36,19 @@
 
 ## 題目與內容規則
 
-- 不轉載官方樣題、考題全文或他人撰寫的解析到 repo 或公開網站；官方內容只放連結。
-- 例外（作者 2026-10-20 決定，網站尚未發佈）：官方公告試題可供作者本機練習，但只能放在 `data/private/`（已列入 `.gitignore`），不可 commit、不可放進 `data/map.json` 或草稿、不可公開部署。
-  - 匯入：`node scripts/import-past-papers.mjs ~/Vault/Sources/PDF data/private/past-papers.concepts.json`，輸出 `data/private/past-papers.json`；概念對照檔由 Claude 逐題判斷，可再調整。
-  - 網站在檔案存在時才載入（`import.meta.glob`），GitHub Actions 部署時沒有這個檔案，公開版不含考古題。不要用本機 `npm run generate` 的產出手動部署。
-  - `npm run validate` 會擋下出現在 git 追蹤檔案中的考古題（ID 以 `past-` 開頭）。
-  - iPAS 能力鑑定小組 2026-10-21 回了兩封信：
-    - 第一封：公開之考試樣題及公開考題「僅供個人學習及教學參考，不得重製、改作，或作為付費題庫與商用教育應用程式等營利用途」。
-    - 第二封（回覆追問免費公開網站）：「使用者在明確標示出處來源，且符合著作權法『合理使用』原則之前提下，原則上不予限制」。
-    - 作者 2026-10-21 決定：先維持考古題只在本機練習，本機以考古題為主，公開版不含考古題。日後若要公開，每題須標示出處（梯次、科目、題號、iPAS 官網連結），並調整 `npm run validate` 的規則。不把考古題改寫成自己的題目；他人撰寫的解析不轉載。
+- 不轉載官方樣題、考題全文或他人撰寫的解析到公開 repo；官方內容只放連結。他人撰寫的解析一律不轉載，不把考古題改寫成自己的題目。
+- 官方公告試題（考古題）：作者 2026-10-22 決定公開到網站（需求在 `tests/features/考古題出處.feature`），推翻 2026-10-21「只在本機練習」的決定。
+  - 依據：iPAS 能力鑑定小組 2026-10-21 兩封回信。第一封說公開考題「僅供個人學習及教學參考，不得重製、改作，或作為付費題庫與商用教育應用程式等營利用途」；作者追問「不收費、無廣告、每題註明梯次與出處並附連結，放在公開網站供考生練習，是否屬於不得重製」，第二封回「使用者在明確標示出處來源，且符合著作權法『合理使用』原則之前提下，原則上不予限制」。
+  - 因此網站必須維持不收費、無廣告（Roadmap 的贊助連結已拿掉）；每題顯示出處「114 年第四次 第一科 第 1 題」與全站共用的 iPAS 官網學習資源頁連結（`utils/pastPapers.ts` 的 `PAST_PAPERS_URL`）；頁尾與 README 有著作權聲明；題目全文照官方，不改作；沒有解析時顯示「答案依 iPAS 官方公告」（解析之後再決定要不要自己寫，自己寫也要經過審核）。
+  - 存放：題目放在私人 repo `beautifulinda/ipas-past-papers`，本機 clone 到 `data/private/`（列在 `.gitignore`），部署時 GitHub Actions 用 deploy key（secret `PAST_PAPERS_DEPLOY_KEY`）讀入。公開 repo 不放題目，避免整理好的題庫被一鍵下載、也才能下架。需求檔、測試、檢查規則留在公開 repo，測試只用自己編的假題目，不可複製任何一句真題。
+  - 用詞：「科目」是地圖上的島（L11、L12）；「考科」是考試的第一科、第二科（第一科只能放 L11 的主題，第二科只能放 L12）。出處存成 `source.exams: [{ session: '114-S4', paper: 1, number: 1 }]`。
+  - 同一題在不同場次考過（忽略標點、空白、全形半形與選項順序，答案比選項文字）只出現一次，沿用最早那次的 ID，出處列出每一次並標「考過 N 次」；官方答案不一致時檢查失敗，等作者確認。
+  - `npm run validate`：出處缺梯次／考科／題號、放錯島、出處重複、同一題答案不一致都會失敗；比對公開 repo 所有檔案與提交，出現考古題題目文字就失敗；部署時加 `--require-private`，讀不到私人題庫就部署失敗（網站維持上一版，不會變成沒有考古題的版本）。
+  - 下架：從私人 repo 拿掉題目再重新部署。使用者瀏覽器的作答紀錄保留（重新上架時接得回來），錯題本與統計只算網站上還有的題目，「學習紀錄」顯示「有 N 題已下架…」。題庫新增考古題造成城鎮降級時，打開網站顯示一次「某主題新增了 N 題考古題」，不放煙火。
+  - 匯入：`node scripts/import-past-papers.mjs ~/Vault/Sources/PDF data/private/past-papers.concepts.json`，輸出 `data/private/past-papers.json`；概念對照檔由 Claude 逐題判斷，可再調整。新增梯次的流程寫在 README〈本機開發〉。
   - 同一封回信要求：參考評鑑內容、學習指引規劃學習架構時，須留意版本與適用性，並註明資料來源為「經濟部產業人才能力鑑定（iPAS）官網」。頁首免責聲明旁已顯示 `scopeSource`，官方改版時要更新版本。
 - 題目為自行撰寫，可用 LLM 產生草稿，人工審核後才把 `reviewed` 設為 `true`。CI 必須擋下 `reviewed: false` 的題目。
-- 每題標註 `source.type`（`original` 或 `official-link`）。
+- 每題標註 `source.type`（`original`、`official-link` 或 `official-past`）；網站分別標示「自編題」「官方樣題（連結）」「官方公告試題」，考古題依梯次由新到舊排在前面，自編題排最後。
 - 科目、分類、概念依官方〈AI 應用規劃師能力鑑定 評鑑內容範圍參考〉115.02 更新版（作者 2026-10-20 確認採用）：分類＝評鑑主題（如 L113），概念＝評鑑內容（如 L11302），ID 直接用官方代碼，來源記在 `data/map.json` 的 `scopeSource`。官方改版時以新版為準，不要自行補上猜測內容。
 - 題目流程：草稿放 `data/drafts/questions.draft.json`（網站不讀取，`reviewed: false`）→ 作者用 `npm run review` 逐題作答並審核 → 通過的題目移到 `data/map.json` 並設為 `reviewed: true`。`npm run validate` 會擋下正式題庫中未審核的題目。
 - 概念說明（summary、keyPoints）由 Claude 依官方範圍撰寫，作者可直接修改。
