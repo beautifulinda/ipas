@@ -286,7 +286,8 @@ function updateMarker(time: number) {
   marker.visible = !node.children && node.depth === 3
   if (marker.visible) {
     const position = world.townPosition(node.data.id)
-    marker.position.set(position.x, position.y + 30 + (reduceMotion() ? 0 : Math.sin(time * 4) * 2), position.z)
+    const above = Math.max(30, world.townHeight(node.data.id) + 10)
+    marker.position.set(position.x, position.y + above + (reduceMotion() ? 0 : Math.sin(time * 4) * 2), position.z)
     marker.rotation.y = time
   }
 }
@@ -320,7 +321,7 @@ function loop(now: number) {
   controls.update()
 
   animateOcean(time)
-  world.animate(time, dt)
+  world.animate(time, dt, !reduceMotion())
   updateMarker(time)
   for (let i = effects.length - 1; i >= 0; i--) {
     if (!effects[i].update(dt)) {
@@ -339,7 +340,7 @@ function celebrate(milestones: Milestone[]) {
   for (const milestone of milestones) {
     const origin =
       milestone.kind === 'tent' || milestone.kind === 'house' || milestone.kind === 'castle'
-        ? world.townPosition(milestone.id).add(new THREE.Vector3(0, 30, 0))
+        ? world.townPosition(milestone.id).add(new THREE.Vector3(0, Math.max(30, world.townHeight(milestone.id) + 8), 0))
         : milestone.kind === 'flag'
           ? world.regionFlagPosition(milestone.id)
           : world.lighthousePosition(milestone.id)

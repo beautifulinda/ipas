@@ -3,8 +3,8 @@ import polygonClipping from 'polygon-clipping'
 import * as THREE from 'three'
 import { seededRandom, type BBox, type Point, type WorldLayout } from '~/utils/islandLayout'
 import type { Progression, TownLevel } from '~/utils/progression'
+import { makeBuilding, type BuildingTick } from '~/utils/scene/buildings'
 import {
-  makeBuilding,
   makeCloud,
   makeFlag,
   makeHill,
@@ -35,10 +35,13 @@ export interface World3D {
   // 文字標籤的 3D 錨點
   anchors: Map<string, THREE.Vector3>
   townPosition: (id: string) => THREE.Vector3
+  // 目前建築的高度（城堡約 40，比其他建築高很多），箭頭與煙火要放在建築上方
+  townHeight: (id: string) => number
   regionFlagPosition: (id: string) => THREE.Vector3
   lighthousePosition: (id: string) => THREE.Vector3
   applyProgression: (progression: Progression, animate: boolean) => void
-  animate: (time: number, dt: number) => void
+  // motion 為 false（系統開啟減少動態效果）時，建築上會動的零件停在原位
+  animate: (time: number, dt: number, motion: boolean) => void
 }
 
 // d3 / polygon-clipping 的多邊形 → three.js 的 Shape（平面 y 對應世界 z，所以 Shape 用 -y）
@@ -75,7 +78,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
   const bounds = new Map<string, BBox>()
   const anchors = new Map<string, THREE.Vector3>()
   const regionTop = new Map<string, number>()
-  const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3 }>()
+  const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; height: number }>()
   const fogs = new Map<string, { group: THREE.Group; fading: number }>()
   const flags = new Map<string, { flag: THREE.Group; position: THREE.Vector3; raising: number }>()
   const lighthouses = new Map<string, { group: THREE.Group; position: THREE.Vector3 }>()
@@ -179,7 +182,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
       group.userData.nodeId = town.id
       islandGroup.add(group)
       pickables.push(group)
-      towns.set(town.id, { group, level: -1, position })
+      towns.set(town.id, { group, level: -1, position, height: 0 })
       bounds.set(town.id, [town.flat[0] - 45, town.flat[1] - 45, town.flat[0] + 45, town.flat[1] + 45])
       anchors.set(town.id, position.clone().add(new THREE.Vector3(0, 12, 0)))
     }
@@ -218,7 +221,10 @@ export function buildWorld3D(world: WorldLayout): World3D {
       const level = progression.townLevels.get(id) ?? 0
       if (level === town.level) continue
       town.group.clear()
-      town.group.add(makeBuilding(level))
+      const building = makeBuilding(level)
+      // 放進地圖前量，量到的是建築本身的高度，不含地面高度與升級動畫的縮放
+      town.height = new THREE.Box3().setFromObject(building).max.y
+      town.group.add(building)
       town.level = level
       if (animate) town.group.scale.setScalar(0.01)
     }
@@ -246,10 +252,11 @@ export function buildWorld3D(world: WorldLayout): World3D {
     for (const [id, lighthouse] of lighthouses) setLighthouseLit(lighthouse.group, progression.litIslands.has(id))
   }
 
-  function animateWorld(time: number, dt: number) {
+  function animateWorld(time: number, dt: number, motion: boolean) {
     for (const town of towns.values()) {
       // 升級時的彈出動畫
       if (town.group.scale.x < 1) town.group.scale.setScalar(Math.min(1, town.group.scale.x + dt * 2.5))
+      ;(town.group.children[0]?.userData.tick as BuildingTick | undefined)?.(time, dt, motion)
     }
     for (const fog of fogs.values()) {
       if (fog.fading < 0 || !fog.group.visible) continue
@@ -297,6 +304,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
     bounds,
     anchors,
     townPosition: (id) => towns.get(id)?.position.clone() ?? new THREE.Vector3(),
+    townHeight: (id) => towns.get(id)?.height ?? 0,
     regionFlagPosition: (id) => flags.get(id)?.position.clone().add(new THREE.Vector3(0, 26, 0)) ?? new THREE.Vector3(),
     lighthousePosition: (id) => lighthouses.get(id)?.position.clone().add(new THREE.Vector3(0, 36, 0)) ?? new THREE.Vector3(),
     applyProgression,

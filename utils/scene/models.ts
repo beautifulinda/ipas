@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import type { TownLevel } from '~/utils/progression'
 import type { Theme3D } from '~/utils/scene/palette'
 
 // 低多邊形模型：原點在底部中央，y 軸朝上。全部用平面著色（flatShading）做出面感
@@ -15,7 +14,7 @@ export function mat(color: string, options: THREE.MeshLambertMaterialParameters 
   return material
 }
 
-function mesh(geometry: THREE.BufferGeometry, material: THREE.Material, y = 0) {
+export function mesh(geometry: THREE.BufferGeometry, material: THREE.Material, y = 0) {
   const m = new THREE.Mesh(geometry, material)
   m.position.y = y
   m.castShadow = true
@@ -78,86 +77,6 @@ export function makeHill(theme: Theme3D, random: () => number) {
   const hill = mesh(geometry, mat(theme.hill))
   hill.scale.y = 0.75
   return hill
-}
-
-// 城鎮建築：依熟練度從工地、帳篷、房子升級到城堡
-export function makeBuilding(level: TownLevel) {
-  const group = new THREE.Group()
-  if (level === 0) {
-    // 工地：一塊泥土地、黃色告示牌、木樁與三角錐；比其他建築大一些，還沒練習的地方在地圖上才看得到
-    group.add(mesh(new THREE.CylinderGeometry(8, 8, 0.6, 8), mat('#b98a5a'), 0.3))
-    group.add(mesh(new THREE.BoxGeometry(0.8, 6, 0.8), mat('#8a5a34'), 3))
-    group.add(mesh(new THREE.BoxGeometry(7, 3.6, 0.6), mat('#ffd23f'), 5.6))
-    for (const [x, z] of [
-      [-3.5, 5.5],
-      [3.5, 5.5],
-    ]) {
-      const cone = mesh(new THREE.ConeGeometry(1.4, 3.2, 6), mat('#ff7a2f'), 1.6)
-      cone.position.x = x
-      cone.position.z = z
-      group.add(cone)
-    }
-    for (const [x, z] of [
-      [-6, -4],
-      [6, -4],
-      [-6, 4],
-      [6, 4],
-    ]) {
-      const post = mesh(new THREE.BoxGeometry(0.7, 3, 0.7), mat('#8a5a34'), 1.5)
-      post.position.x = x
-      post.position.z = z
-      group.add(post)
-    }
-    group.scale.setScalar(1.5)
-  } else if (level === 1) {
-    // 帳篷
-    const tent = mesh(new THREE.ConeGeometry(7, 10, 4), mat('#f2a65a'), 5)
-    tent.rotation.y = Math.PI / 4
-    group.add(tent)
-    const door = mesh(new THREE.ConeGeometry(2.2, 5, 3), mat('#7a3f1d'), 2.5)
-    door.position.z = 4.2
-    group.add(door)
-  } else if (level === 2) {
-    // 房子
-    group.add(mesh(new THREE.BoxGeometry(11, 7, 9), mat('#fff3df'), 3.5))
-    const roof = mesh(new THREE.ConeGeometry(9, 6, 4), mat('#e2564a'), 10)
-    roof.rotation.y = Math.PI / 4
-    group.add(roof)
-    const chimney = mesh(new THREE.BoxGeometry(1.6, 4, 1.6), mat('#a99f95'), 11)
-    chimney.position.set(3, 0, -1.5)
-    chimney.position.y = 11
-    group.add(chimney)
-    const door = mesh(new THREE.BoxGeometry(2.4, 4, 0.4), mat('#8a5a34'), 2)
-    door.position.z = 4.6
-    group.add(door)
-  } else {
-    // 城堡：主樓加四座塔樓，頂上有旗子
-    group.add(mesh(new THREE.BoxGeometry(12, 11, 12), mat('#e2ddd2'), 5.5))
-    for (const [x, z] of [
-      [-6.5, -6.5],
-      [6.5, -6.5],
-      [-6.5, 6.5],
-      [6.5, 6.5],
-    ]) {
-      const tower = mesh(new THREE.CylinderGeometry(2.8, 2.8, 15, 8), mat('#d4cec2'), 7.5)
-      tower.position.x = x
-      tower.position.z = z
-      group.add(tower)
-      const cap = mesh(new THREE.ConeGeometry(3.4, 5, 8), mat('#4f7fe0'), 17.5)
-      cap.position.x = x
-      cap.position.z = z
-      group.add(cap)
-    }
-    const gate = mesh(new THREE.BoxGeometry(4, 6, 0.4), mat('#6b4a2e'), 3)
-    gate.position.z = 6.1
-    group.add(gate)
-    group.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 8, 5), mat('#5a4a3a'), 15))
-    const banner = mesh(new THREE.BoxGeometry(4.5, 2.8, 0.2), mat('#ffd23f'), 17.5)
-    banner.position.x = 2.3
-    banner.name = 'cloth'
-    group.add(banner)
-  }
-  return group
 }
 
 // 地區完成時插上的旗子；布面會隨風擺動（名稱 cloth）
