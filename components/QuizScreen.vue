@@ -7,7 +7,16 @@ defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
 const emit = defineEmits<{ close: []; answered: [questionId: string, choice: string, correct: boolean] }>()
 
 const closeButton = ref<HTMLButtonElement>()
-onMounted(() => closeButton.value?.focus())
+// 關閉後焦點回到打開前的位置（例如「開始練習」），背景在 pages/index.vue 設為 inert
+let opener: HTMLElement | null = null
+onMounted(() => {
+  opener = document.activeElement as HTMLElement | null
+  closeButton.value?.focus()
+})
+// unmounted 在畫面更新完才執行，背景已經拿掉 inert，才能把焦點放回去
+onUnmounted(() => {
+  if (opener?.isConnected) opener.focus({ preventScroll: true })
+})
 
 function onAnswered(questionId: string, choice: string, correct: boolean) {
   emit('answered', questionId, choice, correct)

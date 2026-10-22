@@ -16,11 +16,15 @@ const emit = defineEmits<{ answered: [choice: string, correct: boolean] }>()
 const selected = ref<string>()
 const submitted = ref(false)
 const correct = computed(() => selected.value === props.question.answer)
+const feedbackEl = ref<HTMLElement>()
 
-function submit() {
+async function submit() {
   if (!selected.value || submitted.value) return
   submitted.value = true
   emit('answered', selected.value, correct.value)
+  // 送出按鈕會消失，焦點移到回饋，報讀軟體使用者才不會被丟回頁首
+  await nextTick()
+  feedbackEl.value?.focus({ preventScroll: true })
 }
 
 function optionState(id: string) {
@@ -55,7 +59,7 @@ function optionState(id: string) {
 
     <button v-if="!submitted" type="button" class="submit" :disabled="!selected" @click="submit">送出答案</button>
 
-    <div v-else class="feedback" :class="correct ? 'is-correct' : 'is-wrong'" role="status">
+    <div v-else ref="feedbackEl" class="feedback" :class="correct ? 'is-correct' : 'is-wrong'" tabindex="-1">
       <p class="verdict">{{ verdictText(question, correct) }}</p>
       <p class="explanation" :class="{ muted: !question.explanation }">{{ explanationText(question) }}</p>
       <p v-if="question.source.type === 'official-link' && question.source.url" class="source">
@@ -180,6 +184,10 @@ function optionState(id: string) {
   border-radius: 10px;
 }
 
+.feedback:focus {
+  outline: none;
+}
+
 .feedback p {
   margin: 0;
 }
@@ -202,7 +210,8 @@ function optionState(id: string) {
 
 .muted,
 .source {
-  color: #64748b;
+  /* 在答錯的淡紅底上也要有 4.5:1 的對比 */
+  color: #556274;
   font-size: 0.9rem;
 }
 </style>

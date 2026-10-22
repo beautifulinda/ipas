@@ -608,8 +608,9 @@ watch(
   pointer-events: auto;
   cursor: pointer;
   padding: 0.25rem 0.8rem;
-  border-color: #b23b37;
-  background: #ff6b5e;
+  border-color: #8f2a26;
+  /* 白字要有 4.5:1 的對比 */
+  background: #cc3a2f;
   color: #fff;
   font-size: 14px;
   animation: bob 1.6s ease-in-out infinite;
@@ -620,7 +621,7 @@ watch(
   bottom: -9px;
   left: 50%;
   border: 7px solid transparent;
-  border-top-color: #b23b37;
+  border-top-color: #8f2a26;
   border-bottom: 0;
   content: '';
   transform: translateX(-50%);

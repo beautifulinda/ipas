@@ -57,6 +57,8 @@ const quizOpen = ref(false)
 watch(concept, () => {
   quizOpen.value = false
 })
+// 全螢幕作答時，背景的頁首、地圖、面板、頁尾設為 inert，Tab 與報讀軟體都不會跑到後面；升級卡不在其中，照樣唸得出來
+const quizShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value))
 
 // 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出
 const progression = computed(() => computeProgression(map, attempts.value))
@@ -141,8 +143,13 @@ watch(progression, (after, before) => {
 async function onStart(conceptId: string) {
   focusId.value = conceptId
   await nextTick()
-  if (isMobile.value) quizOpen.value = true
-  else document.querySelector('.practice')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (isMobile.value) {
+    quizOpen.value = true
+    return
+  }
+  document.querySelector('.practice')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // 焦點移到面板標題，報讀軟體使用者才知道面板打開了
+  document.getElementById('concept-title')?.focus({ preventScroll: true })
 }
 
 function goUp() {
@@ -158,7 +165,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
 <template>
   <div class="layout" :class="{ mobile: isMobile }">
-    <header class="header">
+    <header class="header" :inert="quizShown">
       <div class="title-row">
         <h1>iPAS AI 應用規劃師（初級）主題地圖</h1>
         <div class="tools">
@@ -179,7 +186,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       <MapBreadcrumb :path="path" @navigate="focusId = $event" />
     </header>
 
-    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile }">
+    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile }" :inert="quizShown">
       <div class="map-area">
         <IslandMap3D
           v-if="view === 'map'"
@@ -225,7 +232,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
     </main>
 
     <QuizScreen
-      v-if="concept && isMobile && quizOpen"
+      v-if="concept && quizShown"
       :concept="concept"
       :attempts="attempts"
       @close="quizOpen = false"
@@ -256,7 +263,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
     <ConfettiBurst ref="confettiRef" />
 
-    <footer class="hint">
+    <footer class="hint" :inert="quizShown">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
       <template v-else>點擊節點放大・滾輪縮放・拖曳平移・Esc 返回上一層・方向鍵切換同層</template>
       <span v-if="pastPapers.length" class="copyright">{{ COPYRIGHT_NOTICE }}。</span>

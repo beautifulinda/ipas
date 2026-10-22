@@ -14,7 +14,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 <template>
   <aside class="panel" aria-labelledby="concept-title" data-no-map-keys>
     <header class="panel-header">
-      <h2 id="concept-title">{{ concept.title }}</h2>
+      <h2 id="concept-title" tabindex="-1">{{ concept.title }}</h2>
       <button type="button" class="close" aria-label="關閉" @click="emit('close')">✕</button>
     </header>
     <ConceptSummary :concept="concept" />
@@ -45,6 +45,10 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 h2 {
   margin: 0;
   font-size: 1.3rem;
+}
+
+h2:focus {
+  outline: none;
 }
 
 .close {
