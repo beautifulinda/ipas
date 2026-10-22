@@ -1,11 +1,10 @@
 import type { Question, TopicMap } from '~/types/map'
+import { sortForPractice, type PastPaperItem } from '~/utils/pastPapers'
 
-export interface ExtraQuestion {
-  conceptId: string
-  question: Question
-}
+export type ExtraQuestion = PastPaperItem
 
-// 把額外的題目（本機的官方公告試題）併入對應的概念；找不到概念的題目略過
+// 把額外的題目（私人題庫的官方公告試題）併入對應的概念；找不到概念的題目略過
+// 考古題依梯次由新到舊排在前面，自編題排在最後
 export function withExtraQuestions(map: TopicMap, extras: ExtraQuestion[]): TopicMap {
   if (!extras.length) return map
   const byConcept = new Map<string, Question[]>()
@@ -20,7 +19,7 @@ export function withExtraQuestions(map: TopicMap, extras: ExtraQuestion[]): Topi
         ...category,
         concepts: category.concepts.map((concept) => ({
           ...concept,
-          questions: [...concept.questions, ...(byConcept.get(concept.id) ?? [])],
+          questions: sortForPractice([...concept.questions, ...(byConcept.get(concept.id) ?? [])]),
         })),
       })),
     })),

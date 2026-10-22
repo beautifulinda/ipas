@@ -1,11 +1,15 @@
 // 題庫檢查：格式、ID 不重複、答案在選項中，並擋下還沒人工審核（reviewed: false）的題目
 // 用法：npm run validate（CI 也會執行，有錯誤時以非 0 結束）
+//   --require-private：部署時使用，讀不到私人題庫（考古題）就失敗，避免部署出少了考古題的網站
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { checkPastPapers, findLeaks, privateBankError } from '../utils/pastPapers.ts'
 
 const MAP_FILE = 'data/map.json'
 const DRAFT_FILE = 'data/drafts/questions.draft.json'
-// 本機才有的官方公告試題（不進 git）；存在時一併檢查
+// 官方公告試題放在私人 repo，本機與部署時放在 data/private/（公開 repo 不追蹤）；存在時一併檢查
 const PRIVATE_FILE = 'data/private/past-papers.json'
+const requirePrivate = process.argv.includes('--require-private')
 const errors = []
 const fail = (where, message) => errors.push(`${where}：${message}`)
 const isText = (value) => typeof value === 'string' && value.trim().length > 0
@@ -28,7 +32,6 @@ function checkQuestion(q, where, { requireReviewed }) {
   if (!['original', 'official-link', 'official-past'].includes(q.source?.type)) {
     fail(where, 'source.type 必須是 original、official-link 或 official-past')
   }
-  if (q.source?.type === 'official-past' && !isText(q.source.exam)) fail(where, 'official-past 題目必須註明場次與題號（exam）')
   if (q.source?.type === 'official-link' && !isText(q.source.url)) fail(where, 'official-link 題目必須附上官方網址')
   if (typeof q.reviewed !== 'boolean') fail(where, 'reviewed 必須是 true 或 false')
   else if (requireReviewed && !q.reviewed) fail(where, '尚未人工審核（reviewed: false），不可放進正式題庫')
@@ -89,18 +92,40 @@ if (draftFile) {
   }
 }
 
-// 官方公告試題只能放在 data/private/，不可出現在正式題庫或草稿
+// 官方公告試題只能放在私人題庫，不可出現在正式題庫或草稿
 for (const [id, where] of seen) {
   if (id?.startsWith('past-') && !where.startsWith(PRIVATE_FILE)) fail(where, '官方公告試題不可放進會進 git 的檔案')
 }
-if (existsSync(PRIVATE_FILE)) {
-  const privateFile = readJson(PRIVATE_FILE)
-  for (const item of privateFile?.questions ?? []) {
+const missing = privateBankError(existsSync(PRIVATE_FILE))
+if (missing && requirePrivate) fail(PRIVATE_FILE, missing)
+if (!missing) {
+  const items = readJson(PRIVATE_FILE)?.questions ?? []
+  for (const item of items) {
     const where = `${PRIVATE_FILE} ${item.question?.id}`
     if (!seen.has(item.conceptId)) fail(where, `所屬概念 ${item.conceptId || '（未設定）'} 不存在`)
     unique(item.question?.id, where)
     checkQuestion(item.question ?? {}, where, { requireReviewed: true })
   }
+  // 出處完整、考科和島對得上、出處不重複、同一題的官方答案一致
+  if (map) for (const error of checkPastPapers(items, map)) fail(PRIVATE_FILE, error)
+  // 公開 repo 的檔案與每次提交，都不可出現考古題的題目文字
+  for (const error of findLeaks(publicSources(), items)) fail('公開 repo', error)
+}
+
+function git(...args) {
+  return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+}
+
+function publicSources() {
+  const files = git('ls-files', '-z')
+    .split('\0')
+    .filter((file) => file && existsSync(file))
+    .map((file) => ({ name: file, text: readFileSync(file, 'utf8') }))
+  const commits = git('log', '--all', '-p', '--no-color', '--format=%x00%h')
+    .split('\0')
+    .filter(Boolean)
+    .map((chunk) => ({ name: `提交 ${chunk.slice(0, chunk.indexOf('\n'))}`, text: chunk }))
+  return [...files, ...commits]
 }
 
 if (errors.length) {
@@ -109,4 +134,5 @@ if (errors.length) {
   process.exit(1)
 }
 const count = [...seen.keys()].filter((id) => id?.startsWith('q-') || id?.startsWith('past-')).length
-console.log(`題庫檢查通過（正式題目、草稿與本機考古題共 ${count} 題）。`)
+console.log(`題庫檢查通過（正式題目、草稿與考古題共 ${count} 題）。`)
+if (missing) console.log(`注意：${missing}，這次沒有檢查考古題。`)

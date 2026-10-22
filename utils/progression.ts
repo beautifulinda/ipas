@@ -128,3 +128,47 @@ export function newMilestones(map: TopicMap, before: Progression, after: Progres
   }
   return milestones
 }
+
+// 題庫擴充造成的降級：記下每個城鎮上次看到的考古題數與等級，下次打開時比較
+export type TownSnapshot = Record<string, { past: number; level: TownLevel }>
+
+export interface ExpansionNotice {
+  conceptId: string
+  title: string
+  added: number
+}
+
+export function townSnapshot(map: TopicMap, progression: Progression): TownSnapshot {
+  const snapshot: TownSnapshot = {}
+  for (const subject of map.subjects) {
+    for (const category of subject.categories) {
+      for (const concept of category.concepts) {
+        const past = practiceQuestions(concept).filter((q) => q.source.type === 'official-past').length
+        snapshot[concept.id] = { past, level: progression.townLevels.get(concept.id) ?? 0 }
+      }
+    }
+  }
+  return snapshot
+}
+
+// 考古題變多、等級因此降低的城鎮；第一次打開（沒有上次紀錄）不提示
+export function expansionNotices(map: TopicMap, before: TownSnapshot | undefined, after: TownSnapshot): ExpansionNotice[] {
+  if (!before) return []
+  const notices: ExpansionNotice[] = []
+  for (const subject of map.subjects) {
+    for (const category of subject.categories) {
+      for (const concept of category.concepts) {
+        const was = before[concept.id]
+        const now = after[concept.id]
+        if (was && now && now.past > was.past && now.level < was.level) {
+          notices.push({ conceptId: concept.id, title: concept.title, added: now.past - was.past })
+        }
+      }
+    }
+  }
+  return notices
+}
+
+export function expansionText(notice: ExpansionNotice) {
+  return `「${notice.title}」新增了 ${notice.added} 題考古題`
+}

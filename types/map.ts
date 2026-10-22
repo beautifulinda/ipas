@@ -5,11 +5,18 @@ export interface QuestionOption {
   text: string
 }
 
+// 考古題的一個出處，例如 114 年第四次 第一科 第 1 題
+export interface PastExam {
+  session: string // 梯次，例如 "114-S4"（114 年第四次）
+  paper: 1 | 2 // 考科：1＝第一科（對應 L11）、2＝第二科（對應 L12）
+  number: number // 題號
+}
+
 export interface QuestionSource {
-  // official-past：官方公告試題，只放在 data/private/ 供本機練習，不可進 git 或公開部署
+  // official-past：官方公告試題，放在私人 repo（本機 data/private/），部署時才讀進來，不進公開 repo
   type: 'original' | 'official-link' | 'official-past'
   url?: string // type 為 official-link 時必填
-  exam?: string // type 為 official-past 時填入場次與題號，例如「115-S3 第一科 第 1 題」
+  exams?: PastExam[] // type 為 official-past 時必填；同一題在不同場次考過時有多個出處
   note?: string
 }
 

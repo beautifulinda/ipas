@@ -87,6 +87,19 @@ export function summary(attempts: Attempt[]) {
   }
 }
 
+// 題目下架後作答紀錄仍保留（重新上架時接得回來），但統計只算網站上還有的題目
+export function knownAttempts(attempts: readonly Attempt[], knownIds: ReadonlySet<string>) {
+  return attempts.filter((a) => knownIds.has(a.questionId))
+}
+
+export function removedQuestionIds(attempts: readonly Attempt[], knownIds: ReadonlySet<string>) {
+  return [...new Set(attempts.map((a) => a.questionId))].filter((id) => !knownIds.has(id))
+}
+
+export function removedNotice(count: number) {
+  return `有 ${count} 題已下架，作答紀錄仍保留在你的瀏覽器`
+}
+
 export function toExport(attempts: Attempt[], dismissals: Dismissal[] = [], now = new Date()): ExportFile {
   return {
     app: EXPORT_APP,

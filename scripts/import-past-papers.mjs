@@ -1,9 +1,10 @@
-// 把 markitdown 轉好的 iPAS 公告試題 Markdown 解析成題目資料（只供本機練習，輸出到 data/private/，不進 git）
+// 把 markitdown 轉好的 iPAS 公告試題 Markdown 解析成題目資料，輸出到 data/private/（私人 repo ipas-past-papers 的本機資料夾，不進公開 repo）
 // 用法：node scripts/import-past-papers.mjs <試題 Markdown 資料夾> [概念對照檔]
 //   概念對照檔：{ "115-S3-1-01": "L11302", ... }，沒有提供時 conceptId 留空
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+const NOTE = '官方公告試題，試題著作權屬經濟部產業人才能力鑑定（iPAS）。只放在私人 repo，不可放進公開 repo。'
 const [dir, mappingFile] = process.argv.slice(2)
 if (!dir) {
   console.error('用法：node scripts/import-past-papers.mjs <試題 Markdown 資料夾> [概念對照檔]')
@@ -83,7 +84,7 @@ for (const file of files) {
         answer: q.answer,
         explanation: '',
         difficulty: 2,
-        source: { type: 'official-past', exam: where },
+        source: { type: 'official-past', exams: [{ session, paper: subject, number: q.number }] },
         reviewed: true,
       },
     })
@@ -93,7 +94,7 @@ for (const file of files) {
 mkdirSync('data/private', { recursive: true })
 writeFileSync(
   'data/private/past-papers.json',
-  `${JSON.stringify({ note: '官方公告試題，只供本機練習，不可進 git 或公開部署。', questions: result }, null, 2)}\n`,
+  `${JSON.stringify({ note: NOTE, questions: result }, null, 2)}\n`,
 )
 console.log(`解析 ${files.length} 份試卷、${result.length} 題，寫入 data/private/past-papers.json`)
 const unmapped = result.filter((r) => !r.conceptId).length

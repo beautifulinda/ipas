@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import type { Question } from '~/types/map'
+import {
+  PAST_PAPERS_LINK_TEXT,
+  PAST_PAPERS_URL,
+  explanationText,
+  isPastPaper,
+  sourceBadge,
+  sourceLabel,
+  verdictText,
+} from '~/utils/pastPapers'
 
 const props = defineProps<{ question: Question }>()
 const emit = defineEmits<{ answered: [choice: string, correct: boolean] }>()
@@ -23,8 +32,11 @@ function optionState(id: string) {
 
 <template>
   <div class="question">
-    <p v-if="question.source.type === 'official-past'" class="badge">考古題・{{ question.source.exam }}</p>
+    <p class="badge" :class="{ past: isPastPaper(question) }">{{ sourceBadge(question) }}</p>
     <p class="stem">{{ question.stem }}</p>
+    <p v-if="sourceLabel(question)" class="source">
+      {{ sourceLabel(question) }}・<a :href="PAST_PAPERS_URL" target="_blank" rel="noopener">{{ PAST_PAPERS_LINK_TEXT }}</a>
+    </p>
     <div class="options" role="group" aria-label="選項">
       <button
         v-for="option in question.options"
@@ -44,14 +56,10 @@ function optionState(id: string) {
     <button v-if="!submitted" type="button" class="submit" :disabled="!selected" @click="submit">送出答案</button>
 
     <div v-else class="feedback" :class="correct ? 'is-correct' : 'is-wrong'" role="status">
-      <p class="verdict">{{ correct ? '答對了！' : `答錯了，正確答案是 ${question.answer}。` }}</p>
-      <p v-if="question.explanation" class="explanation">{{ question.explanation }}</p>
-      <p v-else class="explanation muted">公告試題未附解析。</p>
+      <p class="verdict">{{ verdictText(question, correct) }}</p>
+      <p class="explanation" :class="{ muted: !question.explanation }">{{ explanationText(question) }}</p>
       <p v-if="question.source.type === 'official-link' && question.source.url" class="source">
         出處：<a :href="question.source.url" target="_blank" rel="noopener">官方資料</a>
-      </p>
-      <p v-if="question.source.type === 'official-past'" class="source">
-        出處：iPAS 公告試題 {{ question.source.exam }}
       </p>
     </div>
   </div>
@@ -63,15 +71,28 @@ function optionState(id: string) {
   margin: 0 0 0.4rem;
   padding: 0.1rem 0.6rem;
   border-radius: 999px;
-  background: #fff1c2;
-  color: #7a5a12;
+  background: #eef1f5;
+  color: #475569;
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.badge.past {
+  background: #fff1c2;
+  color: #7a5a12;
 }
 
 .stem {
   margin: 0 0 0.75rem;
   font-weight: 600;
+}
+
+.stem + .source {
+  margin: -0.4rem 0 0.75rem;
+}
+
+.source a {
+  color: inherit;
 }
 
 .options {

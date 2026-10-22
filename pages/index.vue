@@ -3,26 +3,30 @@ import { useElementSize } from '@vueuse/core'
 import type { TopicMap } from '~/types/map'
 import mapData from '~/data/map.json'
 import { findConcept } from '~/utils/concepts'
+import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
 import {
   computeProgression,
+  expansionNotices,
+  expansionText,
   isMajorMilestone,
   milestoneText,
   newMilestones,
   recommendedStart,
+  townSnapshot,
   type Milestone,
+  type TownSnapshot,
 } from '~/utils/progression'
 
-// 官方公告試題只放在本機的 data/private/（不進 git、不公開部署）；檔案不存在時就只用正式題庫
+// 官方公告試題放在私人 repo，本機是 data/private/，部署時由 GitHub Actions 讀進來；檔案不存在時就只用正式題庫
+// 同一題在不同場次考過時合併成一題，出處列出每一次
 const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('/data/private/past-papers.json', {
   eager: true,
   import: 'default',
 })
-const map = withExtraQuestions(
-  mapData as TopicMap,
-  Object.values(privateBanks).flatMap((bank) => bank.questions),
-)
+const pastPapers = mergePastPapers(Object.values(privateBanks).flatMap((bank) => bank.questions)).items
+const map = withExtraQuestions(mapData as TopicMap, pastPapers)
 const tree = toMapTree(map)
 
 const focusId = ref(ROOT_ID)
@@ -67,15 +71,45 @@ const plaques = ref<Toast[]>([])
 let toastId = 0
 // 紀錄載入完成後的下一輪才開始偵測，載入舊紀錄造成的變化不算「剛達成」
 let armed = false
+function showToast(text: string, ms = 3000) {
+  const id = ++toastId
+  toasts.value.push({ id, text })
+  setTimeout(() => (toasts.value = toasts.value.filter((t) => t.id !== id)), ms)
+}
+
+// 題庫新增考古題造成城鎮降級時，打開網站說明一次原因；每次等級變化都記下來供下次比較
+const TOWNS_KEY = 'ipas:towns'
+function readSnapshot(): TownSnapshot | undefined {
+  try {
+    return JSON.parse(localStorage.getItem(TOWNS_KEY) ?? 'null') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+function saveSnapshot() {
+  try {
+    localStorage.setItem(TOWNS_KEY, JSON.stringify(townSnapshot(map, progression.value)))
+  } catch {
+    // 瀏覽器不允許儲存時就不提示，不影響練習
+  }
+}
 watch(
   ready,
   (value) => {
-    if (value) nextTick(() => (armed = true))
+    if (!value) return
+    nextTick(() => {
+      const notices = expansionNotices(map, readSnapshot(), townSnapshot(map, progression.value))
+      if (notices.length > 3) showToast(`有 ${notices.length} 個主題新增了考古題，等級依新的題數重新計算`, 6000)
+      else for (const notice of notices) showToast(expansionText(notice), 6000)
+      saveSnapshot()
+      armed = true
+    })
   },
   { immediate: true },
 )
 watch(progression, (after, before) => {
   if (!armed || !before) return
+  saveSnapshot()
   const milestones = newMilestones(map, before, after)
   if (!milestones.length) return
   mapRef.value?.celebrate(milestones)
@@ -204,6 +238,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
     <footer class="hint">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
       <template v-else>點擊節點放大・滾輪縮放・拖曳平移・Esc 返回上一層・方向鍵切換同層</template>
+      <span v-if="pastPapers.length" class="copyright">{{ COPYRIGHT_NOTICE }}。</span>
     </footer>
   </div>
 </template>
@@ -338,7 +373,8 @@ body {
   background: #ffe9a8;
   box-shadow: 0 4px 0 rgba(43, 38, 51, 0.35);
   font-weight: 800;
-  white-space: nowrap;
+  max-width: min(32rem, 90vw);
+  text-align: center;
   animation: pop 0.35s ease-out;
 }
 
@@ -406,6 +442,10 @@ body {
   padding: 0.5rem 1.5rem;
   color: #64748b;
   font-size: 0.8rem;
+}
+
+.copyright {
+  display: block;
 }
 
 /* 手機：標題獨佔一行、工具按鈕排在下一行，地圖盡量大 */

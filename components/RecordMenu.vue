@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
-import { summary } from '~/utils/progress'
+import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
 
 const props = defineProps<{ map: TopicMap }>()
 const emit = defineEmits<{ navigate: [conceptId: string] }>()
 
 const { attempts, wrongQuestionIds, storageError, exportFile, importFile } = useRecords()
 const index = computed(() => questionIndex(props.map))
-const stats = computed(() => summary([...attempts.value]))
+const knownIds = computed(() => new Set(index.value.keys()))
+// 已下架題目的作答紀錄保留在瀏覽器（重新上架時接得回來），但不算進統計
+const stats = computed(() => summary(knownAttempts(attempts.value, knownIds.value)))
+const removed = computed(() => removedQuestionIds(attempts.value, knownIds.value).length)
 const wrong = computed(() =>
   wrongQuestionIds.value
     .map((id) => index.value.get(id))
@@ -51,6 +54,7 @@ async function onImport(event: Event) {
         已作答 {{ stats.total }} 次，答對率
         {{ stats.total ? `${Math.round(stats.rate * 100)}%` : '—' }}
       </p>
+      <p v-if="removed" class="hint">{{ removedNotice(removed) }}</p>
 
       <h3>錯題本</h3>
       <p v-if="!wrong.length" class="empty">目前沒有錯題。</p>
@@ -66,7 +70,7 @@ async function onImport(event: Event) {
       <h3>備份與轉移</h3>
       <p class="hint">紀錄只存在這個瀏覽器，清除瀏覽器資料後會消失，建議定期匯出。</p>
       <div class="actions">
-        <button type="button" :disabled="!stats.total" @click="exportFile">匯出 JSON</button>
+        <button type="button" :disabled="!attempts.length" @click="exportFile">匯出 JSON</button>
         <button type="button" @click="fileInput?.click()">匯入 JSON</button>
         <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="onImport" />
       </div>
