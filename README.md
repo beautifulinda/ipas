@@ -99,6 +99,8 @@
 
 功能需求以中文 Gherkin（假設／當／那麼）寫在 [`tests/features/`](tests/features/)，每個功能都包含正常流程與例外流程。需求檔本身就是測試：由 [quickpickle](https://github.com/dnotes/quickpickle) 對應到步驟定義後在 Vitest 執行，需求與程式行為不一致時測試會失敗。
 
+需要在真的瀏覽器裡操作的場景標上 `@e2e`，改由 Playwright（透過 [playwright-bdd](https://github.com/vitalets/playwright-bdd)）在桌面 Chrome、Android（Chromium）、iPhone（WebKit）三種環境執行。E2E 用 [`tests/e2e/fixtures/map.json`](tests/e2e/fixtures/map.json) 的假題庫建置網站，不讀私人題庫；需求檔背景裡的主題表格必須和假題庫一致。
+
 ```gherkin
 場景: 城堡的題目後來答錯，降回房子
   假設 「模型評估」已經是城堡
@@ -163,7 +165,7 @@ Subject（科目）
 - [x] 學習紀錄匯出、匯入（JSON）
 - [ ] 隱私說明頁
 - [x] CI：題庫格式檢查、型別檢查、單元測試（Vitest），任何一項失敗就不部署
-- [ ] Playwright 手機與桌面尺寸 E2E 測試
+- [x] Playwright 手機與桌面 E2E 測試（目前涵蓋「從這裡開始」）
 
 ### Phase 2：互動功能
 
@@ -188,6 +190,8 @@ npm run review     # 逐題審核練習題草稿
 npm run generate   # 產生靜態網站
 npm start          # 產生靜態網站並在 http://localhost:4173/ipas/ 預覽
 npm test           # 單元測試與需求測試（Vitest）
+npm run e2e:build  # 用假題庫產生 E2E 測試用的網站（第一次要先 npx playwright install chromium webkit）
+npm run e2e        # E2E 測試（Playwright）
 ```
 
 官方公告試題放在私人 repo `ipas-past-papers`，本機 clone 到 `data/private/`（已列入 `.gitignore`）。檔案存在時，`npm run dev`、`npm start` 與 `npm run validate` 會一併載入與檢查；不存在時網站只有自編題。

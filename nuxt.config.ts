@@ -1,7 +1,13 @@
+import { fileURLToPath } from 'node:url'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 
 // 部署在 GitHub Pages 子路徑 /ipas/，少了這個設定上線後靜態資源路徑會錯
 const baseURL = '/ipas/'
+
+// E2E 測試：IPAS_E2E=1 時改用 tests/e2e/fixtures/ 的假題庫、不讀私人題庫（CI 讀不到，本機也要一致），
+// 輸出到 .output-e2e，不影響正式網站
+const e2e = process.env.IPAS_E2E === '1'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-20',
@@ -20,4 +26,9 @@ export default defineNuxtConfig({
     },
   },
   ssr: true,
+  alias: {
+    '#map-data': fileURLToPath(new URL(e2e ? './tests/e2e/fixtures/map.json' : './data/map.json', import.meta.url)),
+    '#private-data': fileURLToPath(new URL(e2e ? './tests/e2e/fixtures/no-private' : './data/private', import.meta.url)),
+  },
+  ...(e2e && { nitro: { output: { dir: '.output-e2e' } } }),
 })

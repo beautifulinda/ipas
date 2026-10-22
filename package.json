@@ -11,6 +11,8 @@
     "postinstall": "nuxt prepare",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
+    "e2e:build": "IPAS_E2E=1 nuxt generate && rm -rf .output-e2e/site && mkdir -p .output-e2e/site && cp -R .output-e2e/public .output-e2e/site/ipas",
+    "e2e": "bddgen && playwright test",
     "validate": "node scripts/validate-data.mjs",
     "review": "node scripts/review.mjs"
   },
@@ -31,14 +33,18 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-polygon": "^3.0.2",
     "@types/d3-selection": "^3.0.12",
     "@types/d3-shape": "^3.2.0",
     "@types/d3-transition": "^3.0.9",
     "@types/d3-zoom": "^3.0.9",
+    "@types/node": "^24.19.2",
     "@types/three": "^0.186.0",
+    "playwright-bdd": "^9.2.1",
     "quickpickle": "^1.11.2",
+    "serve": "^14.2.6",
     "typescript": "~5.9",
     "vitest": "^5.0.5",
     "vue-tsc": "^3.3.13"

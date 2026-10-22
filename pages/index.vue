@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core'
 import type { TopicMap } from '~/types/map'
-import mapData from '~/data/map.json'
+// 正式網站是 data/map.json；E2E 測試時換成假題庫（見 nuxt.config.ts）
+import mapData from '#map-data'
 import { findConcept } from '~/utils/concepts'
 import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
@@ -19,9 +20,9 @@ import {
   type TownSnapshot,
 } from '~/utils/progression'
 
-// 官方公告試題放在私人 repo，本機是 data/private/，部署時由 GitHub Actions 讀進來；檔案不存在時就只用正式題庫
+// 官方公告試題放在私人 repo，本機是 data/private/（#private-data），部署時由 GitHub Actions 讀進來；檔案不存在時就只用正式題庫
 // 同一題在不同場次考過時合併成一題，出處列出每一次
-const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('/data/private/past-papers.json', {
+const privateBanks = import.meta.glob<{ questions: ExtraQuestion[] }>('#private-data/past-papers.json', {
   eager: true,
   import: 'default',
 })

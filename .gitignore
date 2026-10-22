@@ -12,3 +12,9 @@ dist
 
 # 官方公告試題放在私人 repo ipas-past-papers（本機 clone 到這裡），不可進公開 repo
 data/private/
+
+# E2E 測試的建置輸出與 playwright-bdd 產生的測試檔、報告
+.output-e2e
+.features-gen
+test-results
+playwright-report

@@ -65,9 +65,12 @@
 4. ✅ 概念卡片與練習題作答、作答紀錄存 IndexedDB（`composables/useRecords.ts`）、錯題本、匯出匯入（格式與合併邏輯在 `utils/progress.ts`）。
    - 錯題本規則（作者 2026-10-21 決定，需求在 `tests/features/錯題本.feature`）：答錯進入錯題本；答對不自動移出，而是詢問「這題答對了，要從錯題本移除嗎？」，使用者選「移除」才移出；移除後又答錯會重新進入；錯題本與城鎮等級無關。
    - 移除紀錄存在 IndexedDB 的 `dismissals`（資料庫版本 2，從版本 1 升級會保留舊作答紀錄）；匯出檔版本 2 含 `dismissals`，仍可匯入版本 1。
-5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`），三項都過才部署；PR 只跑檢查不部署。尚未做：Playwright 手機與桌面尺寸測試。
+5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`）、Playwright E2E，全部通過才部署；PR 只跑檢查不部署。
    - 需求測試（作者 2026-10-21 決定）：功能需求用正體中文 Gherkin（`# language: zh-TW`，假設／當／那麼／而且／但是）寫在 `tests/features/*.feature`，每個功能都要有 Happy Path 與 Sad Path，用詞要讓作者不看程式碼就能審。由 quickpickle 在 Vitest 執行，步驟定義在 `tests/features/*.steps.ts`（要加進 `vitest.config.ts` 的 `setupFiles`）。新的需求檔先給作者審過再實作步驟。
-   - E2E 計畫用 Playwright 讀同樣的中文 Gherkin（候選：`playwright-bdd` 或 `@quickpickle/playwright`），在本機與 GitHub Actions 都要跑；CI 沒有考古題，E2E 只能用正式題庫或測試資料。
+   - E2E（2026-10-22）：`playwright-bdd` 讀同樣的 `.feature`，只跑標 `@e2e` 的場景，步驟在 `tests/e2e/*.steps.ts`（Vitest 不讀）。不選 `@quickpickle/playwright`：作者標示不穩定，且無法開觸控模擬（`pointer: coarse`）。
+   - 專案：桌面 Chrome、Android（Pixel 7）、iPhone（WebKit），開啟 `reducedMotion` 讓點擊位置穩定。
+   - 資料：`IPAS_E2E=1` 建置時 `#map-data` 指向 `tests/e2e/fixtures/map.json`、`#private-data` 指向空資料夾（本機與 CI 一致，不讀考古題），輸出到 `.output-e2e`。需求背景的主題表格要和假題庫一致，步驟會檢查。
+   - 指令：`npm run e2e:build` 再 `npm run e2e`。
 
 第一階段目標是「地圖能操作、網址能打開」，題目數量、Supabase、贊助連結都延後。
 

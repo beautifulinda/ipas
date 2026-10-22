@@ -1,0 +1,84 @@
+{
+  "version": "e2e",
+  "updatedAt": "2026-10-22",
+  "disclaimer": "E2E 測試用的假資料，不是正式題庫。",
+  "subjects": [
+    {
+      "id": "E2E-S",
+      "title": "測試科目",
+      "categories": [
+        {
+          "id": "E2E-C",
+          "title": "主題區",
+          "concepts": [
+            {
+              "id": "E2E-K1",
+              "title": "AI 的定義",
+              "summary": "測試用主題，沒有題目。",
+              "keyPoints": [],
+              "questions": []
+            },
+            {
+              "id": "E2E-K2",
+              "title": "AI 治理",
+              "summary": "測試用主題，有兩題。",
+              "keyPoints": [],
+              "questions": [
+                {
+                  "id": "E2E-K2-1",
+                  "type": "single",
+                  "stem": "測試題：AI 治理 第 1 題",
+                  "options": [
+                    { "id": "A", "text": "甲" },
+                    { "id": "B", "text": "乙" }
+                  ],
+                  "answer": "A",
+                  "explanation": "",
+                  "difficulty": 1,
+                  "source": { "type": "original" },
+                  "reviewed": true
+                },
+                {
+                  "id": "E2E-K2-2",
+                  "type": "single",
+                  "stem": "測試題：AI 治理 第 2 題",
+                  "options": [
+                    { "id": "A", "text": "甲" },
+                    { "id": "B", "text": "乙" }
+                  ],
+                  "answer": "A",
+                  "explanation": "",
+                  "difficulty": 1,
+                  "source": { "type": "original" },
+                  "reviewed": true
+                }
+              ]
+            },
+            {
+              "id": "E2E-K3",
+              "title": "資料來源",
+              "summary": "測試用主題，有一題。",
+              "keyPoints": [],
+              "questions": [
+                {
+                  "id": "E2E-K3-1",
+                  "type": "single",
+                  "stem": "測試題：資料來源 第 1 題",
+                  "options": [
+                    { "id": "A", "text": "甲" },
+                    { "id": "B", "text": "乙" }
+                  ],
+                  "answer": "A",
+                  "explanation": "",
+                  "difficulty": 1,
+                  "source": { "type": "original" },
+                  "reviewed": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
