@@ -5,8 +5,8 @@ import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { buildWorld, seededRandom, type BBox } from '~/utils/islandLayout'
 import type { MapNode } from '~/utils/mapTree'
-import type { Milestone, Progression } from '~/utils/progression'
-import { makeFireworks, makeMarker } from '~/utils/scene/models'
+import type { CelebrationPlan, Progression } from '~/utils/progression'
+import { makeFireworks, makeLightPillar, makeMarker, makeStarBurst, type Effect } from '~/utils/scene/models'
 import { SEA_COLOR, SKY_COLOR } from '~/utils/scene/palette'
 import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
 
@@ -82,7 +82,10 @@ let world: World3D | undefined
 let marker: THREE.Mesh
 let frame = 0
 let lastTime = 0
-const effects: { points: THREE.Points; update: (dt: number) => boolean }[] = []
+const effects: Effect[] = []
+// 煙火爆開時照亮附近的閃光；固定一盞燈只調亮度，中途增減燈光會讓 three.js 重新編譯材質，手機上會卡一下
+let flashLight: THREE.PointLight
+let flashAge = Infinity
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // 鏡頭飛行動畫
@@ -317,36 +320,86 @@ function loop(now: number) {
     controls.target.lerpVectors(flight.from[1], flight.to[1], t)
     if (flight.t >= 1) flight = undefined
   }
-  controls.enabled = !flight
+  if (showcase) animateShowcase(dt)
+  controls.enabled = !flight && !showcase
   controls.update()
+  flashAge += dt
+  flashLight.intensity = Math.max(0, 1 - flashAge / 0.35) * 9000
 
   animateOcean(time)
   world.animate(time, dt, !reduceMotion())
   updateMarker(time)
   for (let i = effects.length - 1; i >= 0; i--) {
-    if (!effects[i].update(dt)) {
-      scene.remove(effects[i].points)
-      effects.splice(i, 1)
-    }
+    if (effects[i].update(dt)) continue
+    scene.remove(effects[i].object)
+    effects[i].dispose()
+    effects.splice(i, 1)
   }
   renderer.render(scene, camera)
   placeLabels()
 }
 
-// 達成里程碑：在城鎮、旗子或燈塔的位置放煙火
-function celebrate(milestones: Milestone[]) {
-  if (!world || reduceMotion()) return
-  const random = seededRandom(String(Date.now()))
-  for (const milestone of milestones) {
-    const origin =
-      milestone.kind === 'tent' || milestone.kind === 'house' || milestone.kind === 'castle'
-        ? world.townPosition(milestone.id).add(new THREE.Vector3(0, Math.max(30, world.townHeight(milestone.id) + 8), 0))
-        : milestone.kind === 'flag'
-          ? world.regionFlagPosition(milestone.id)
-          : world.lighthousePosition(milestone.id)
-    const effect = makeFireworks(origin, random)
-    scene.add(effect.points)
+// 鏡頭特寫：靠近目標、繞半圈，再回到原本的位置
+let showcase: { t: number; from: [THREE.Vector3, THREE.Vector3]; center: THREE.Vector3 } | undefined
+const SHOWCASE_SECONDS = 3.2
+
+function animateShowcase(dt: number) {
+  const s = showcase!
+  s.t = Math.min(1, s.t + dt / SHOWCASE_SECONDS)
+  const [fromPosition, fromTarget] = s.from
+  const near = Math.sin(s.t * Math.PI)
+  const offset = fromPosition.clone().sub(s.center)
+  const startAngle = Math.atan2(offset.x, offset.z)
+  const radius = Math.hypot(offset.x, offset.z)
+  const angle = startAngle + Math.sin(s.t * Math.PI) * Math.PI * 0.35
+  const r = radius + (110 - radius) * near
+  const y = fromPosition.y + (s.center.y + 80 - fromPosition.y) * near
+  camera.position.set(s.center.x + Math.sin(angle) * r, y, s.center.z + Math.cos(angle) * r)
+  controls.target.lerpVectors(fromTarget, s.center, near)
+  if (s.t >= 1) {
+    camera.position.copy(fromPosition)
+    controls.target.copy(fromTarget)
+    showcase = undefined
+  }
+}
+
+function addEffect(effect: Effect, delay = 0) {
+  setTimeout(() => {
+    scene.add(effect.object)
     effects.push(effect)
+  }, delay * 1000)
+}
+
+// 升級演出：依 celebrationFor 的計畫放星星、煙火、光柱，必要時鏡頭靠近；減少動態效果時計畫裡這些都是 0
+function celebrate(plan: CelebrationPlan) {
+  if (!world) return
+  const { milestone } = plan
+  const random = seededRandom(String(Date.now()))
+  const town = milestone.kind === 'tent' || milestone.kind === 'house' || milestone.kind === 'castle'
+  // 演出的地面位置與上方位置
+  const base = town
+    ? world.townPosition(milestone.id)
+    : milestone.kind === 'flag'
+      ? world.regionFlagPosition(milestone.id).sub(new THREE.Vector3(0, 26, 0))
+      : world.lighthousePosition(milestone.id).sub(new THREE.Vector3(0, 36, 0))
+  const top = town
+    ? base.clone().add(new THREE.Vector3(0, Math.max(14, world.townHeight(milestone.id) + 4), 0))
+    : base.clone().add(new THREE.Vector3(0, milestone.kind === 'flag' ? 28 : 38, 0))
+
+  if (plan.stars) addEffect(makeStarBurst(top, random, plan.stars), 0.5)
+  if (plan.pillar) addEffect(makeLightPillar(base), 0.3)
+  const shots = plan.fireworks === 1 ? [[0, 8, 0, 0.7]] : plan.fireworks >= 3 ? [[0, 6, 0, 0.45], [-14, 12, 6, 0.9], [14, 8, -6, 1.3]] : []
+  for (const [dx, dy, dz, delay] of shots) {
+    const origin = top.clone().add(new THREE.Vector3(dx, dy, dz))
+    addEffect(makeFireworks(origin, random), delay)
+    setTimeout(() => {
+      flashLight.position.copy(origin)
+      flashAge = 0
+    }, delay * 1000)
+  }
+  if (plan.camera) {
+    flight = undefined
+    showcase = { t: 0, from: [camera.position.clone(), controls.target.clone()], center: base.clone().add(new THREE.Vector3(0, 12, 0)) }
   }
 }
 defineExpose({ celebrate })
@@ -386,6 +439,8 @@ onMounted(() => {
 
   marker = makeMarker()
   scene.add(marker)
+  flashLight = new THREE.PointLight('#fff1b0', 0, 160, 1.5)
+  scene.add(flashLight)
 
   controls = new MapControls(camera, renderer.domElement)
   controls.enableRotate = false
@@ -410,7 +465,11 @@ onBeforeUnmount(() => {
   renderer?.dispose()
 })
 
-watch(focusNode, () => flyToFocus(true))
+watch(focusNode, () => {
+  // 使用者換了位置，特寫中止
+  showcase = undefined
+  flyToFocus(true)
+})
 watch([width, height], () => {
   applyViewport()
   flyToFocus(false)
@@ -428,7 +487,7 @@ watch(layout, () => {
 })
 watch(
   () => props.progression,
-  (progression) => world?.applyProgression(progression, true),
+  (progression) => world?.applyProgression(progression, !reduceMotion()),
 )
 </script>
 

@@ -163,37 +163,136 @@ export function makeMarker() {
   return marker
 }
 
-// 煙火：一次往四面八方噴出的粒子，受重力落下並淡出
-export function makeFireworks(origin: THREE.Vector3, random: () => number) {
-  const count = 120
+// 升級演出的特效：每格畫面呼叫 update，回傳 false 代表結束，可以移除
+export interface Effect {
+  object: THREE.Object3D
+  update: (dt: number) => boolean
+  dispose: () => void
+}
+
+// 粒子爆發：往四面八方噴出，受重力落下並淡出；drag 是空氣阻力，數字越大停得越快
+function burst(
+  origin: THREE.Vector3,
+  random: () => number,
+  options: { count: number; colors: string[]; speed: number; life: number; size: number; drag: number },
+): Effect {
+  const { count, speed, life, size, drag } = options
   const positions = new Float32Array(count * 3)
   const colors = new Float32Array(count * 3)
   const velocities: THREE.Vector3[] = []
-  const palette = ['#ffd23f', '#ff5a5a', '#4f8cff', '#7fdc5a', '#ff9af0'].map((c) => new THREE.Color(c))
+  const palette = options.colors.map((c) => new THREE.Color(c))
   for (let i = 0; i < count; i++) {
     positions.set([origin.x, origin.y, origin.z], i * 3)
     const color = palette[Math.floor(random() * palette.length)]
     colors.set([color.r, color.g, color.b], i * 3)
     const direction = new THREE.Vector3(random() - 0.5, random() * 0.9 + 0.3, random() - 0.5).normalize()
-    velocities.push(direction.multiplyScalar(30 + random() * 30))
+    velocities.push(direction.multiplyScalar(speed * (0.5 + random() * 0.5)))
   }
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  const material = new THREE.PointsMaterial({ size: 3.5, vertexColors: true, transparent: true, depthWrite: false })
-  const points = new THREE.Points(geometry, material)
+  const material = new THREE.PointsMaterial({ size, vertexColors: true, transparent: true, depthWrite: false })
   let age = 0
-  // 回傳 false 代表動畫結束，可以移除
-  const update = (dt: number) => {
-    age += dt
-    const attr = geometry.getAttribute('position') as THREE.BufferAttribute
-    for (let i = 0; i < count; i++) {
-      velocities[i].y -= 40 * dt
-      attr.setXYZ(i, attr.getX(i) + velocities[i].x * dt, attr.getY(i) + velocities[i].y * dt, attr.getZ(i) + velocities[i].z * dt)
-    }
-    attr.needsUpdate = true
-    material.opacity = Math.max(0, 1 - age / 1.8)
-    return age < 1.8
+  return {
+    object: new THREE.Points(geometry, material),
+    update(dt) {
+      age += dt
+      const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+      for (let i = 0; i < count; i++) {
+        velocities[i].y -= 40 * dt
+        velocities[i].multiplyScalar(1 - Math.min(1, dt * drag))
+        attr.setXYZ(i, attr.getX(i) + velocities[i].x * dt, attr.getY(i) + velocities[i].y * dt, attr.getZ(i) + velocities[i].z * dt)
+      }
+      attr.needsUpdate = true
+      material.opacity = Math.max(0, 1 - age / life)
+      return age < life
+    },
+    dispose() {
+      geometry.dispose()
+      material.dispose()
+    },
   }
-  return { points, update }
+}
+
+// 煙火：一發 220 顆粒子
+export function makeFireworks(origin: THREE.Vector3, random: () => number) {
+  return burst(origin, random, { count: 220, colors: ['#ffd23f', '#fff4c2', '#ff5a5a', '#4f8cff', '#ff9af0'], speed: 70, life: 2.4, size: 3.2, drag: 0.6 })
+}
+
+// 金色星星：慢慢往上飄、閃一下就消失
+export function makeStarBurst(origin: THREE.Vector3, random: () => number, count: number) {
+  return burst(origin, random, { count, colors: ['#ffd23f', '#fff4c2', '#ffe066'], speed: 28, life: 1.6, size: 2.6, drag: 2.4 })
+}
+
+// 衝天光柱：從建築中心往上長，再淡出縮小
+export function makeLightPillar(base: THREE.Vector3): Effect {
+  const material = new THREE.MeshBasicMaterial({
+    color: '#ffe066',
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+  const coreMaterial = material.clone()
+  const outer = new THREE.Mesh(new THREE.CylinderGeometry(5, 9, 120, 16, 1, true), material)
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.6, 120, 12, 1, true), coreMaterial)
+  outer.position.y = core.position.y = 60
+  const group = new THREE.Group()
+  group.position.copy(base)
+  group.add(outer, core)
+  let age = 0
+  const life = 1.8
+  return {
+    object: group,
+    update(dt) {
+      age += dt
+      const k = age / life
+      group.scale.set(1 - k * 0.5, Math.min(1, age / 0.35), 1 - k * 0.5)
+      material.opacity = (k < 0.2 ? k / 0.2 : 1 - (k - 0.2) / 0.8) * 0.5
+      coreMaterial.opacity = Math.min(1, material.opacity * 1.6)
+      return age < life
+    },
+    dispose() {
+      outer.geometry.dispose()
+      core.geometry.dispose()
+      material.dispose()
+      coreMaterial.dispose()
+    },
+  }
+}
+
+// 揚起的塵土：建築換代時，地面一圈往外擴散的白色小煙團
+export function makeDustRing(center: THREE.Vector3, radius: number): Effect {
+  const material = new THREE.MeshLambertMaterial({ color: '#f4eee2', transparent: true, opacity: 0.9, flatShading: true, depthWrite: false })
+  const geometry = new THREE.IcosahedronGeometry(1.4, 0)
+  const group = new THREE.Group()
+  group.position.copy(center)
+  const puffs = Array.from({ length: 14 }, (_, i) => {
+    const puff = new THREE.Mesh(geometry, material)
+    const a = (i / 14) * Math.PI * 2
+    puff.userData.direction = new THREE.Vector3(Math.cos(a), 0, Math.sin(a))
+    group.add(puff)
+    return puff
+  })
+  let age = 0
+  const life = 0.9
+  return {
+    object: group,
+    update(dt) {
+      age += dt
+      const k = Math.min(1, age / life)
+      for (const puff of puffs) {
+        puff.position.copy(puff.userData.direction).multiplyScalar(radius * (0.6 + k * 0.8))
+        puff.position.y = 0.8 + k * 1.5
+        puff.scale.setScalar(0.6 + k * 1.2)
+      }
+      material.opacity = 0.9 * (1 - k)
+      return age < life
+    },
+    dispose() {
+      geometry.dispose()
+      material.dispose()
+    },
+  }
 }

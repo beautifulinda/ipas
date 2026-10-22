@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeProgression, newMilestones } from '~/utils/progression'
+import { celebrationFor, computeProgression, featuredMilestone, newMilestones, type Milestone } from '~/utils/progression'
 import { attempt, concept, question, sampleMap } from './fixtures'
 
 describe('computeProgression：城鎮等級', () => {
@@ -90,5 +90,44 @@ describe('newMilestones', () => {
     const map = sampleMap()
     const progression = computeProgression(map, [attempt('q1', true)])
     expect(newMilestones(map, progression, progression)).toEqual([])
+  })
+})
+
+describe('celebrationFor：升級演出依等級加碼', () => {
+  const m = (kind: Milestone['kind']): Milestone => ({ kind, id: kind, title: kind })
+  const normal = { reducedMotion: false, soundOn: true }
+
+  it('同時達成好幾個里程碑時只演最大的那一個', () => {
+    expect(featuredMilestone([m('castle'), m('flag'), m('house')])?.kind).toBe('flag')
+    expect(featuredMilestone([m('flag'), m('lighthouse')])?.kind).toBe('lighthouse')
+    expect(featuredMilestone([])).toBeUndefined()
+  })
+
+  it('帳篷：星星、兩音鈴聲、升級卡，沒有煙火與彩帶', () => {
+    expect(celebrationFor([m('tent')], normal)).toMatchObject({ stars: 60, fireworks: 0, confetti: 'none', pillar: false, camera: false, sound: 'chime2', banner: 'card' })
+  })
+
+  it('房子：比帳篷多一發煙火與少量彩帶', () => {
+    expect(celebrationFor([m('house')], normal)).toMatchObject({ fireworks: 1, confetti: 'few', sound: 'chime3', banner: 'card' })
+  })
+
+  it('城堡、插旗、燈塔：光柱、三發煙火、大量彩帶、號角聲、鏡頭靠近、匾額', () => {
+    for (const kind of ['castle', 'flag', 'lighthouse'] as const) {
+      expect(celebrationFor([m(kind)], normal)).toMatchObject({ fireworks: 3, confetti: 'many', pillar: true, camera: true, sound: 'fanfare', banner: 'plaque' })
+    }
+  })
+
+  it('減少動態效果時只保留升級卡與音效', () => {
+    expect(celebrationFor([m('castle')], { reducedMotion: true, soundOn: true })).toMatchObject({
+      stars: 0, fireworks: 0, confetti: 'none', pillar: false, camera: false, sound: 'fanfare', banner: 'plaque',
+    })
+  })
+
+  it('關掉音效時不出聲，畫面照常', () => {
+    expect(celebrationFor([m('tent')], { reducedMotion: false, soundOn: false })).toMatchObject({ sound: undefined, stars: 60 })
+  })
+
+  it('沒有新的里程碑就沒有演出', () => {
+    expect(celebrationFor([], normal)).toBeUndefined()
   })
 })

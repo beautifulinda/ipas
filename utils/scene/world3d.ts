@@ -12,8 +12,10 @@ import {
   makeMountain,
   makePine,
   makeTree,
+  makeDustRing,
   mat,
   setLighthouseLit,
+  type Effect,
 } from '~/utils/scene/models'
 import { THEMES_3D } from '~/utils/scene/palette'
 
@@ -78,7 +80,15 @@ export function buildWorld3D(world: WorldLayout): World3D {
   const bounds = new Map<string, BBox>()
   const anchors = new Map<string, THREE.Vector3>()
   const regionTop = new Map<string, number>()
-  const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; height: number }>()
+// 建築換代的動畫：舊建築縮進塵土（0.25 秒），新建築回彈長出（0.7 秒）
+  interface Swap {
+    old?: THREE.Object3D
+    oldScale: number
+    scale: number
+    t: number
+  }
+  const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; height: number; swap?: Swap }>()
+  const effects: Effect[] = []
   const fogs = new Map<string, { group: THREE.Group; fading: number }>()
   const flags = new Map<string, { flag: THREE.Group; position: THREE.Vector3; raising: number }>()
   const lighthouses = new Map<string, { group: THREE.Group; position: THREE.Vector3 }>()
@@ -220,13 +230,20 @@ export function buildWorld3D(world: WorldLayout): World3D {
     for (const [id, town] of towns) {
       const level = progression.townLevels.get(id) ?? 0
       if (level === town.level) continue
-      town.group.clear()
       const building = makeBuilding(level)
       // 放進地圖前量，量到的是建築本身的高度，不含地面高度與升級動畫的縮放
       town.height = new THREE.Box3().setFromObject(building).max.y
+      // 只有升級才播換代動畫；降級、第一次載入、減少動態效果時直接換掉
+      const old = animate && town.level >= 0 && level > town.level ? town.group.children[0] : undefined
+      town.group.clear()
       town.group.add(building)
+      town.swap = undefined
+      if (old) {
+        town.group.add(old)
+        town.swap = { old, oldScale: old.scale.x, scale: building.scale.x, t: 0 }
+        building.scale.setScalar(0.001)
+      }
       town.level = level
-      if (animate) town.group.scale.setScalar(0.01)
     }
     for (const [id, fog] of fogs) {
       const explored = progression.exploredRegions.has(id)
@@ -252,10 +269,39 @@ export function buildWorld3D(world: WorldLayout): World3D {
     for (const [id, lighthouse] of lighthouses) setLighthouseLit(lighthouse.group, progression.litIslands.has(id))
   }
 
+  function animateSwap(town: { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; swap?: Swap }, dt: number) {
+    const swap = town.swap!
+    swap.t += dt
+    if (swap.old) {
+      const k = Math.min(1, swap.t / 0.25)
+      swap.old.scale.setScalar(swap.oldScale * (1 - k))
+      if (k < 1) return
+      swap.old.removeFromParent()
+      swap.old = undefined
+      const dust = makeDustRing(town.position, town.level === 3 ? 15 : 10)
+      root.add(dust.object)
+      effects.push(dust)
+    }
+    // 彈簧曲線：衝過頭再回彈，長出時略為拉高
+    const k = Math.min(1, (swap.t - 0.25) / 0.7)
+    const s = 1 - Math.cos(k * Math.PI * 2.5) * Math.exp(-k * 5)
+    const building = town.group.children[0]
+    building.scale.set(swap.scale * s, swap.scale * Math.max(0.05, s * (1 + Math.sin(k * Math.PI) * 0.12)), swap.scale * s)
+    if (k >= 1) {
+      building.scale.setScalar(swap.scale)
+      town.swap = undefined
+    }
+  }
+
   function animateWorld(time: number, dt: number, motion: boolean) {
+    for (let i = effects.length - 1; i >= 0; i--) {
+      if (effects[i].update(dt)) continue
+      effects[i].object.removeFromParent()
+      effects[i].dispose()
+      effects.splice(i, 1)
+    }
     for (const town of towns.values()) {
-      // 升級時的彈出動畫
-      if (town.group.scale.x < 1) town.group.scale.setScalar(Math.min(1, town.group.scale.x + dt * 2.5))
+      if (town.swap) animateSwap(town, dt)
       ;(town.group.children[0]?.userData.tick as BuildingTick | undefined)?.(time, dt, motion)
     }
     for (const fog of fogs.values()) {

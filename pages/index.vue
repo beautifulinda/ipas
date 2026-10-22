@@ -8,15 +8,16 @@ import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
 import {
+  PLAQUE_RIBBON,
+  celebrationFor,
   computeProgression,
   expansionNotices,
   expansionText,
-  isMajorMilestone,
   milestoneText,
   newMilestones,
   recommendedStart,
   townSnapshot,
-  type Milestone,
+  type CelebrationPlan,
   type TownSnapshot,
 } from '~/utils/progression'
 
@@ -60,15 +61,22 @@ watch(concept, () => {
 const progression = computed(() => computeProgression(map, attempts.value))
 // 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
 const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
-const mapRef = ref<{ celebrate: (milestones: Milestone[]) => void }>()
+const mapRef = ref<{ celebrate: (plan: CelebrationPlan) => void }>()
+const confettiRef = ref<{ burst: (count: number) => void }>()
 
-// 達成里程碑時放煙火：一般升級跳出恭喜訊息，大事件（城堡、插旗、燈塔）出現里程碑匾額；剛載入紀錄時不算
+// 升級演出（需求在 tests/features/升級演出.feature）：同時達成好幾個里程碑只演最大的那一個；
+// 帳篷、房子跳出升級卡，城堡、插旗、燈塔出現有皇冠的里程碑匾額；剛載入紀錄時不算
 interface Toast {
   id: number
   text: string
 }
+interface Banner {
+  id: number
+  plan: CelebrationPlan
+}
 const toasts = ref<Toast[]>([])
-const plaques = ref<Toast[]>([])
+const cards = ref<Banner[]>([])
+const plaques = ref<Banner[]>([])
 let toastId = 0
 // 紀錄載入完成後的下一輪才開始偵測，載入舊紀錄造成的變化不算「剛達成」
 let armed = false
@@ -111,15 +119,20 @@ watch(
 watch(progression, (after, before) => {
   if (!armed || !before) return
   saveSnapshot()
-  const milestones = newMilestones(map, before, after)
-  if (!milestones.length) return
-  mapRef.value?.celebrate(milestones)
-  for (const milestone of milestones) {
-    const id = ++toastId
-    const list = isMajorMilestone(milestone) ? plaques : toasts
-    list.value.push({ id, text: milestoneText(milestone) })
-    setTimeout(() => (list.value = list.value.filter((t) => t.id !== id)), isMajorMilestone(milestone) ? 5000 : 3000)
+  const plan = celebrationFor(newMilestones(map, before, after), {
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    soundOn: true,
+  })
+  if (!plan) return
+  mapRef.value?.celebrate(plan)
+  if (plan.confetti !== 'none') {
+    const count = plan.confetti === 'many' ? 160 : 60
+    setTimeout(() => confettiRef.value?.burst(count), plan.banner === 'plaque' ? 400 : 600)
   }
+  const id = ++toastId
+  const list = plan.banner === 'plaque' ? plaques : cards
+  list.value.push({ id, plan })
+  setTimeout(() => (list.value = list.value.filter((b) => b.id !== id)), plan.banner === 'plaque' ? 5000 : 3200)
 })
 
 // 點「從這裡開始」：前往那個主題並直接顯示題目（手機開全螢幕作答，桌面捲到練習題）
@@ -217,24 +230,29 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       @answered="onAnswered"
     />
 
-    <!-- 升級的恭喜訊息 -->
+    <!-- 升級卡（帳篷、房子）與題庫擴充的提示 -->
     <div class="toasts" role="status" aria-live="polite">
+      <UpgradeCard
+        v-for="card in cards"
+        :key="card.id"
+        :kind="card.plan.milestone.kind === 'tent' ? 'tent' : 'house'"
+        :text="milestoneText(card.plan.milestone)"
+      />
       <p v-for="toast in toasts" :key="toast.id" class="toast">{{ toast.text }}</p>
     </div>
 
-    <!-- 大事件的里程碑匾額，點一下就關閉 -->
+    <!-- 大事件的里程碑匾額（城堡、插旗、燈塔），點一下就關閉 -->
     <div class="plaques" role="status" aria-live="polite">
-      <button
+      <MilestonePlaque
         v-for="plaque in plaques"
         :key="plaque.id"
-        type="button"
-        class="plaque"
-        @click="plaques = plaques.filter((p) => p.id !== plaque.id)"
-      >
-        <span class="plaque-title">里程碑達成</span>
-        <span class="plaque-text">{{ plaque.text }}</span>
-      </button>
+        :text="milestoneText(plaque.plan.milestone)"
+        :ribbon="PLAQUE_RIBBON[plaque.plan.milestone.kind as keyof typeof PLAQUE_RIBBON]"
+        @close="plaques = plaques.filter((p) => p.id !== plaque.id)"
+      />
     </div>
+
+    <ConfettiBurst ref="confettiRef" />
 
     <footer class="hint">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
@@ -396,45 +414,8 @@ body {
   transform: translate(-50%, -50%);
 }
 
-.plaque {
-  display: grid;
-  gap: 0.35rem;
-  min-width: min(22rem, 86vw);
-  padding: 1.1rem 1.6rem 1.3rem;
-  border: 4px solid #6b4a1f;
-  border-radius: 14px;
-  background: linear-gradient(#f9d77e, #e7b84a);
-  box-shadow:
-    inset 0 0 0 3px #fff2c4,
-    0 8px 0 rgba(43, 38, 51, 0.4);
-  color: #3d2a0c;
-  font: inherit;
-  text-align: center;
-  cursor: pointer;
-  animation: plaque-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-
-.plaque-title {
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.3em;
-}
-
-.plaque-text {
-  font-size: 1.35rem;
-  font-weight: 900;
-}
-
-@keyframes plaque-in {
-  from {
-    transform: translateY(-40px) scale(0.7);
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .toast,
-  .plaque {
+  .toast {
     animation: none;
   }
 }

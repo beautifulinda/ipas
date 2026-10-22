@@ -112,6 +112,64 @@ export function isMajorMilestone(milestone: Milestone) {
 
 const UPGRADE_KIND: Record<TownLevel, Milestone['kind'] | undefined> = { 0: undefined, 1: 'tent', 2: 'house', 3: 'castle' }
 
+// 升級演出（需求在 tests/features/升級演出.feature）：同時達成好幾個里程碑時只演最大的那一個，
+// 演出依等級加碼——帳篷、房子跳升級卡；城堡、插旗、燈塔是完整的里程碑演出。
+// 系統開啟減少動態效果時，會動的部分（星星、煙火、彩帶、光柱、鏡頭）都關掉，升級卡與音效照常
+const MILESTONE_RANK: Record<Milestone['kind'], number> = { tent: 1, house: 2, castle: 3, flag: 4, lighthouse: 5 }
+
+export function featuredMilestone(milestones: readonly Milestone[]): Milestone | undefined {
+  return milestones.reduce<Milestone | undefined>((best, m) => (!best || MILESTONE_RANK[m.kind] > MILESTONE_RANK[best.kind] ? m : best), undefined)
+}
+
+export type CelebrationSound = 'chime2' | 'chime3' | 'fanfare'
+
+export interface CelebrationPlan {
+  milestone: Milestone
+  // 建築上方冒出的金色星星顆數
+  stars: number
+  // 煙火發數
+  fireworks: number
+  confetti: 'none' | 'few' | 'many'
+  // 往上射出的金色光柱
+  pillar: boolean
+  // 鏡頭靠近繞半圈再回到原位
+  camera: boolean
+  sound: CelebrationSound | undefined
+  // card：畫面上方的升級卡；plaque：畫面中央有皇冠的里程碑匾額
+  banner: 'card' | 'plaque'
+}
+
+export function celebrationFor(
+  milestones: readonly Milestone[],
+  options: { reducedMotion: boolean; soundOn: boolean },
+): CelebrationPlan | undefined {
+  const milestone = featuredMilestone(milestones)
+  if (!milestone) return undefined
+  const grand = isMajorMilestone(milestone)
+  const motion = !options.reducedMotion
+  const sound: CelebrationSound = milestone.kind === 'tent' ? 'chime2' : milestone.kind === 'house' ? 'chime3' : 'fanfare'
+  return {
+    milestone,
+    stars: motion ? (grand ? 120 : milestone.kind === 'house' ? 100 : 60) : 0,
+    fireworks: motion ? (grand ? 3 : milestone.kind === 'house' ? 1 : 0) : 0,
+    confetti: motion ? (grand ? 'many' : milestone.kind === 'house' ? 'few' : 'none') : 'none',
+    pillar: motion && grand,
+    camera: motion && grand,
+    sound: options.soundOn ? sound : undefined,
+    banner: grand ? 'plaque' : 'card',
+  }
+}
+
+// 升級卡的標題，例如「升級為帳篷！」；匾額下方緞帶的文字
+export function upgradeCardTitle(kind: 'tent' | 'house') {
+  return `升級為${TOWN_LEVEL_NAMES[kind === 'tent' ? 1 : 2]}！`
+}
+export const PLAQUE_RIBBON: Record<'castle' | 'flag' | 'lighthouse', string> = {
+  castle: '城堡完成',
+  flag: '地區全部掌握',
+  lighthouse: '全島點亮',
+}
+
 // 比較作答前後，找出這次新達成的里程碑；城鎮一次升好幾級時只算最高的那一級，降級不算
 export function newMilestones(map: TopicMap, before: Progression, after: Progression): Milestone[] {
   const titles = new Map<string, string>()
