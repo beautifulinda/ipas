@@ -40,6 +40,8 @@ async function answeredBefore(page: Page, title: string, n: string, correct: boo
   await expect(page.locator('.feedback')).toBeVisible()
   await gotoConcept(page, title)
   await expect(panelTitle(page)).toHaveText(title)
+  // 等作答紀錄載入完（題號標出答對／答錯）再繼續操作
+  await expect(page.getByRole('button', { name: new RegExp(`^第 ${n} 題（答[對錯]）`) })).toBeVisible()
 }
 
 Given(/^我已經作答過「(.+)」的第 (\d+) 題$/, async ({ page }, title: string, n: string) => {

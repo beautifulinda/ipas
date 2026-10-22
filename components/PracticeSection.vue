@@ -22,16 +22,19 @@ const latest = computed(() => latestByQuestion([...props.attempts]))
 // 錯題本的題目答對時，詢問是否移除；不回答或換題就當作先保留
 const dismissPrompt = ref<'ask' | 'removed'>()
 
+// 使用者自己換過題（點題號、左右鍵、進入作答）後，就不再自動跳題
+let moved = false
 // 換主題時重新決定從哪一題開始；作答中不會自動跳題
 watch(
   () => props.concept.id,
   () => {
+    moved = false
     index.value = startIndex()
   },
 )
-// 重新整理網頁時，作答紀錄可能在主題打開後才載入完成，載入後再跳到上次的進度
+// 重新整理網頁時，作答紀錄可能在主題打開後才載入完成，載入後再跳到上次的進度；使用者已經換過題就不跳
 watch(ready, (value) => {
-  if (value) index.value = startIndex()
+  if (value && !moved) index.value = startIndex()
 })
 watch(current, () => {
   dismissPrompt.value = undefined
@@ -44,6 +47,7 @@ const dismissDoneEl = ref<HTMLElement>()
 
 // 鍵盤進入作答：接著上次的進度，焦點移到選項（報讀軟體會先唸出題目）
 async function focusQuestion() {
+  moved = true
   index.value = startIndex()
   await nextTick()
   card.value?.focusOptions()
@@ -52,6 +56,7 @@ defineExpose({ focusQuestion })
 
 async function goTo(i: number) {
   if (i < 0 || i >= questions.value.length || i === index.value) return
+  moved = true
   index.value = i
   await nextTick()
   card.value?.focusOptions()
@@ -121,7 +126,7 @@ function statusOf(questionId: string) {
           :class="[statusOf(question.id).className, { active: i === index }]"
           :aria-current="i === index ? 'step' : undefined"
           :aria-label="`第 ${i + 1} 題（${statusOf(question.id).label}）`"
-          @click="index = i"
+          @click="goTo(i)"
         >
           {{ i + 1 }}
         </button>

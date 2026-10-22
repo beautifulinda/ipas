@@ -153,9 +153,9 @@ Then(/^畫面出現「(.+)」的升級卡$/, async ({ page }, text: string) => {
 
 // 測試聽不到聲音：改查升級卡在 aria-live 區域裡，而且沒有被 inert 擋掉（被擋掉就不在無障礙樹裡，getByRole 找不到）
 Then('螢幕報讀軟體讀得到這張升級卡', async ({ page }) => {
-  const live = page.getByRole('status').filter({ hasText: '升級為' })
-  await expect(live.first()).toBeVisible()
-  await expect(live.first()).toHaveAttribute('aria-live', 'polite')
+  // 升級卡幾秒後就消失，用一次檢查同時確認兩件事
+  const live = page.getByRole('status').filter({ hasText: '升級為' }).and(page.locator('[aria-live="polite"]'))
+  await expect(live).toBeVisible()
 })
 
 // 掃描結果留到「那麼」再檢查
