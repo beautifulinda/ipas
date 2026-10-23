@@ -13,8 +13,9 @@ const steps = ([0, 1, 2, 3] as TownLevel[]).map((level) => ({ level, name: TOWN_
     <span class="icon" aria-hidden="true">{{ ICONS[kind] }}</span>
     <strong class="title">{{ upgradeCardTitle(kind) }}</strong>
     <span class="sub">{{ text }}</span>
-    <ol class="track" aria-label="升級路線">
-      <li v-for="step in steps" :key="step.level" :class="{ done: step.level < current, now: step.level === current }" :aria-current="step.level === current ? 'step' : undefined">
+    <!-- 升級路線只給眼睛看；報讀軟體只唸標題與恭喜訊息，不唸「工地 帳篷 房子 城堡」 -->
+    <ol class="track" aria-hidden="true">
+      <li v-for="step in steps" :key="step.level" :class="{ done: step.level < current, now: step.level === current }">
         {{ step.name }}
       </li>
     </ol>

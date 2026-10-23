@@ -6,6 +6,7 @@ import mapData from '#map-data'
 import { findConcept, practiceQuestions } from '~/utils/concepts'
 import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
+import type { MapControls } from '~/composables/useMapKeyboard'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
 import {
   PLAQUE_RIBBON,
@@ -68,7 +69,8 @@ const quizShown = computed(() => Boolean(concept.value && isMobile.value && quiz
 const progression = computed(() => computeProgression(map, attempts.value))
 // 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
 const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
-const mapRef = ref<{ celebrate: (plan: CelebrationPlan) => void; focusMap: () => void }>()
+// 地圖對外提供的操作（IslandMap3D 的 defineExpose）
+const mapRef = ref<MapControls & { celebrate: (plan: CelebrationPlan) => void; focus: () => void }>()
 const panelRef = ref<{ focusQuestion: () => Promise<void> }>()
 const confettiRef = ref<{ burst: (count: number) => void }>()
 
@@ -169,11 +171,21 @@ async function onEnter() {
   else await enterAnswering()
 }
 
-// 作答中按 Esc：回到地圖模式，焦點回到地圖，報讀軟體會唸出目前的位置
+// 作答中按 Esc（或用滑鼠點地圖）：回到地圖模式，焦點回到地圖，報讀軟體會唸出目前的位置
 function onLeave() {
   answering.value = false
-  mapRef.value?.focusMap()
+  mapRef.value?.focus()
 }
+
+// 地圖的按鍵規則集中在 useMapKeyboard；提示框只在桌面、用鍵盤操作時顯示
+const { usingKeyboard } = useMapKeyboard({
+  map: mapRef,
+  atConcept: computed(() => Boolean(concept.value)),
+  answering,
+  enter: onEnter,
+  leave: onLeave,
+})
+const showKeyboardHint = computed(() => usingKeyboard.value && !isMobile.value && view.value === 'map')
 
 function goUp() {
   const parent = path.value[path.value.length - 2]
@@ -221,12 +233,12 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           :answering="answering && !isMobile"
           :question-number="questionNumber"
           @start="onStart"
-          @enter="onEnter"
           @leave="onLeave"
           :inset-bottom="insetBottom"
           @unsupported="view = 'list'"
         />
         <ListView v-else :map="map" :focus-id="focusId" :attempts="attempts" @navigate="focusId = $event" />
+        <KeyboardHint v-if="showKeyboardHint" :answering="answering" />
         <!-- 手機：左上角的返回按鈕（也可以用系統的返回手勢） -->
         <button
           v-if="isMobile && view === 'map' && path.length > 1"

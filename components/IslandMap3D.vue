@@ -26,8 +26,9 @@ const props = withDefaults(
 )
 const focusId = defineModel<string>('focusId', { required: true })
 // start：點了「從這裡開始」，要直接開始練習那個主題
-// enter：在主題上按 Enter，進入作答；leave：作答中按 Esc，回到地圖模式（需求在 tests/features/鍵盤作答.feature）
-const emit = defineEmits<{ unsupported: []; start: [conceptId: string]; enter: [conceptId: string]; leave: [] }>()
+// leave：作答中用滑鼠點了地圖，回到地圖模式
+// 按鍵規則不在這裡，集中在 composables/useMapKeyboard.ts，透過 defineExpose 的操作控制地圖
+const emit = defineEmits<{ unsupported: []; start: [conceptId: string]; leave: [] }>()
 
 // 鏡頭：固定的斜俯視角度，旋轉鎖住
 const FOV = 32
@@ -225,37 +226,6 @@ function goSibling(step: number) {
   if (!siblings || siblings.length < 2) return
   const index = siblings.indexOf(focusNode.value)
   focusId.value = siblings[(index + step + siblings.length) % siblings.length].data.id
-}
-
-function onKeydown(event: KeyboardEvent) {
-  // 題目已經處理過的按鍵（換選項、換題）不再處理；換題時舊的選項可能已經從畫面移除，認不出它原本在面板裡
-  if (event.defaultPrevented) return
-  const target = event.target
-  // 作答中按 Esc：回到地圖模式，停在同一個主題；再按一次才回上一層
-  if (event.key === 'Escape' && props.answering) {
-    emit('leave')
-    return
-  }
-  // 在輸入框或面板（data-no-map-keys）裡按鍵時，不切換地圖；在面板裡按 Esc 一樣回到上一層
-  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"], [data-no-map-keys]')) {
-    if (event.key !== 'Escape' || !target.closest('[data-no-map-keys]')) return
-  }
-  // 在主題上按 Enter 進入作答；焦點在按鈕或連結上時，Enter 是按那個按鈕
-  if (event.key === 'Enter') {
-    if (focusNode.value.depth === 3 && !(target instanceof Element && target.closest('button, a'))) {
-      event.preventDefault()
-      emit('enter', focusNode.value.data.id)
-    }
-    return
-  }
-  if (event.key === 'Escape') goUp()
-  else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    goSibling(-1)
-  } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    event.preventDefault()
-    goSibling(1)
-  }
 }
 
 type Box = [number, number, number, number]
@@ -456,7 +426,8 @@ function celebrate(plan: CelebrationPlan) {
 function focusMap() {
   canvasEl.value?.focus({ preventScroll: true })
 }
-defineExpose({ celebrate, focusMap })
+// 給外部（pages/index.vue 與 useMapKeyboard）控制地圖的操作
+defineExpose({ celebrate, focus: focusMap, goUp, goSibling })
 
 onMounted(() => {
   try {
@@ -508,13 +479,11 @@ onMounted(() => {
   rebuildWorld()
   applyViewport()
   flyToFocus(false)
-  window.addEventListener('keydown', onKeydown)
   frame = requestAnimationFrame(loop)
 })
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(frame)
-  window.removeEventListener('keydown', onKeydown)
   controls?.dispose()
   renderer?.dispose()
 })
@@ -598,8 +567,14 @@ watch(
   overflow: hidden;
 }
 
+/* 滑鼠點地圖時不顯示框；用鍵盤回到地圖（按 Esc）時顯示細框，看得出現在是地圖模式 */
 .canvas:focus {
   outline: none;
+}
+
+.canvas:focus-visible {
+  outline: 3px solid #4f8cff;
+  outline-offset: -3px;
 }
 
 .canvas {

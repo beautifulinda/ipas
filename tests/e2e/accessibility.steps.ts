@@ -172,3 +172,20 @@ When(/^我用自動無障礙檢查掃描(首頁|作答畫面)$/, async ({ page }
 Then('沒有對比不足的文字', async ({ page }) => {
   expect(contrastViolations.get(page)).toEqual([])
 })
+
+// 升級卡幾秒後就消失：唸出的內容在找到卡片時一併記下，「但是」那一步再檢查
+const upgradeSpeech = new WeakMap<Page, string>()
+
+Then(/^報讀軟體唸出「(.+)」$/, async ({ page }, text: string) => {
+  const card = page.getByRole('status').filter({ hasText: text }).last()
+  await expect(card).toBeVisible()
+  upgradeSpeech.set(page, await card.ariaSnapshot())
+})
+
+Then(/^不會唸出(「.+」)這條升級路線$/, async ({ page }, list: string) => {
+  const speech = upgradeSpeech.get(page)!
+  for (const name of list.match(/「([^」]+)」/g)!.map((q) => q.slice(1, -1))) {
+    // 標題「升級為房子！」本身含有「房子」，只檢查標題以外的部分
+    expect(speech.replace(/升級為.+?！/g, '')).not.toContain(name)
+  }
+})

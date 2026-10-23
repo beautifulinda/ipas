@@ -186,3 +186,17 @@ When(/^我用滑鼠點地圖上的「(.+)」$/, async ({ page }, title: string) 
 When(/^我用滑鼠點「(.+)」$/, async ({ page }, name: string) => {
   await options(page).getByRole('radio', { name }).click()
 })
+
+Then('地圖周圍出現焦點框', async ({ page }) => {
+  const canvas = page.locator('.map3d canvas')
+  await expect(canvas).toBeFocused()
+  expect(await canvas.evaluate((el) => el.matches(':focus-visible'))).toBe(true)
+})
+
+Then(/^地圖下方的提示框顯示「(.+)」$/, async ({ page }, text: string) => {
+  await expect(page.locator('.keyboard-hint')).toHaveText(text)
+})
+
+Then('地圖下方沒有提示框', async ({ page }) => {
+  await expect(page.locator('.keyboard-hint')).toHaveCount(0)
+})
