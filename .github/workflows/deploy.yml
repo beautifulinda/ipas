@@ -17,9 +17,9 @@ concurrency:
 jobs:
   # 題庫檢查、型別檢查、單元測試；任何一項失敗就不部署
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 比對所有提交裡有沒有考古題的題目文字
           fetch-depth: 0
@@ -28,7 +28,7 @@ jobs:
         id: private
         if: github.event_name != 'pull_request'
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: beautifulinda/ipas-past-papers
           path: data/private
@@ -38,7 +38,7 @@ jobs:
         run: |
           echo "::error::讀不到私人題庫：請確認部署金鑰 PAST_PAPERS_DEPLOY_KEY 仍有效。網站維持上一版。"
           exit 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
@@ -51,10 +51,10 @@ jobs:
 
   # E2E：用假題庫建置網站，在桌面、Android、iPhone 三種瀏覽器跑標了 @e2e 的需求場景
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
@@ -64,7 +64,7 @@ jobs:
       - name: 取得 Playwright 版本
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: browsers
         with:
           path: ~/.cache/ms-playwright
@@ -76,7 +76,7 @@ jobs:
       - run: npm run e2e:build
       - run: npm run e2e
       # 失敗時保留報告（截圖、操作追蹤），可在 Actions 頁面下載
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -88,33 +88,37 @@ jobs:
   build:
     needs: [check, e2e]
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 讀取私人題庫
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: beautifulinda/ipas-past-papers
           path: data/private
           ssh-key: ${{ secrets.PAST_PAPERS_DEPLOY_KEY }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
           cache: npm
       - run: npm ci
       - run: npm run generate
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: .output/public
+          # v4 起預設不放隱藏檔；照舊放進 .nojekyll，網站內容和升級前一樣
+          include-hidden-files: true
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
+      # deploy-pages v4 起需要讀取 Actions
+      actions: read
     # 部署本身不中途取消，避免 Pages 停在部署一半的狀態
     concurrency:
       group: pages
@@ -124,4 +128,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
