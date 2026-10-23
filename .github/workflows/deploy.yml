@@ -49,9 +49,28 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # E2E：用假題庫建置網站，在桌面、Android、iPhone 三種瀏覽器跑標了 @e2e 的需求場景
-  e2e:
+  # 從 package-lock.json 讀出 Playwright 版本，e2e 用同版本的官方映像檔；升級 Playwright 時不用另外改這裡
+  playwright-version:
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: package-lock.json
+          sparse-checkout-cone-mode: false
+      - id: version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+  # E2E：用假題庫建置網站，在桌面、Android、iPhone 三種瀏覽器跑標了 @e2e 的需求場景
+  # 在 Playwright 官方映像檔裡跑：系統套件與瀏覽器都已裝好，不用每次從 Ubuntu 鏡像站下載（鏡像站慢時曾卡住 30 分鐘以上）
+  e2e:
+    needs: playwright-version
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      # Chromium 建議的設定，避免共享記憶體不足而當掉
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -60,19 +79,6 @@ jobs:
           check-latest: true
           cache: npm
       - run: npm ci
-      # 瀏覽器依 Playwright 版本快取；系統套件仍要每次安裝
-      - name: 取得 Playwright 版本
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
-        id: browsers
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - if: steps.browsers.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit
-      - if: steps.browsers.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium webkit
       - run: npm run e2e:build
       - run: npm run e2e
       # 失敗時保留報告（截圖、操作追蹤），可在 Actions 頁面下載
