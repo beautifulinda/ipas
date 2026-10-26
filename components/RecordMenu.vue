@@ -2,6 +2,7 @@
 import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
 import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
+import { wrongBookBySubject } from '~/utils/wrongBook'
 
 const props = defineProps<{ map: TopicMap }>()
 const emit = defineEmits<{ navigate: [conceptId: string] }>()
@@ -13,11 +14,16 @@ const knownIds = computed(() => new Set(index.value.keys()))
 // 已下架題目的作答紀錄保留在瀏覽器（重新上架時接得回來），但不算進統計
 const stats = computed(() => summary(knownAttempts(attempts.value, knownIds.value)))
 const removed = computed(() => removedQuestionIds(attempts.value, knownIds.value).length)
-const wrong = computed(() =>
-  wrongQuestionIds.value
-    .map((id) => index.value.get(id))
-    .filter((item) => item !== undefined),
+const wrong = computed(() => wrongQuestionIds.value.filter((id) => index.value.has(id)))
+// L11、L12 分開考，錯題本分科目看；考古題再依梯次分開，看這次錯幾題／50
+const subjects = computed(() =>
+  wrongBookBySubject(props.map, wrong.value, new Set(knownAttempts(attempts.value, knownIds.value).map((a) => a.questionId))),
 )
+const subjectId = ref<string>()
+const currentSubject = computed(
+  () => subjects.value.find((s) => s.id === subjectId.value) ?? subjects.value.find((s) => s.wrongCount) ?? subjects.value[0],
+)
+const percent = (n: number, total: number) => `${Math.round((n / total) * 100)}%`
 
 const message = ref('')
 const fileInput = ref<HTMLInputElement>()
@@ -58,15 +64,38 @@ async function onImport(event: Event) {
       <p v-if="removed" class="hint">{{ removedNotice(removed) }}</p>
 
       <h3>錯題本</h3>
-      <p v-if="!wrong.length" class="empty">目前沒有錯題。</p>
-      <ul v-else class="wrong-list">
-        <li v-for="item in wrong" :key="item.question.id">
-          <button type="button" @click="goTo(item.conceptId)">
-            <span class="concept">{{ item.conceptTitle }}</span>
-            <span class="stem">{{ item.question.stem }}</span>
-          </button>
-        </li>
-      </ul>
+      <div class="subject-tabs" role="group" aria-label="科目">
+        <button
+          v-for="subject in subjects"
+          :key="subject.id"
+          type="button"
+          :aria-pressed="subject.id === currentSubject?.id"
+          @click="subjectId = subject.id"
+        >
+          {{ subject.id }}・錯 {{ subject.wrongCount }}
+        </button>
+      </div>
+      <template v-if="currentSubject">
+        <p v-if="!currentSubject.groups.length" class="empty">{{ currentSubject.title }}目前沒有題目。</p>
+        <details v-for="group in currentSubject.groups" :key="group.key" class="paper" :open="group.wrong.length > 0 && group.wrong.length <= 5">
+          <summary>
+            <span class="paper-title">{{ group.title }}</span>
+            <span v-if="group.size" class="paper-score">
+              錯 {{ group.wrong.length }}／{{ group.size }}（{{ percent(group.wrong.length, group.size) }}）・已作答 {{ group.answered }} 題
+            </span>
+            <span v-else class="paper-score">錯 {{ group.wrong.length }} 題</span>
+          </summary>
+          <p v-if="!group.wrong.length" class="empty">{{ group.answered ? '這次沒有錯題。' : '還沒作答這次的題目。' }}</p>
+          <ul v-else class="wrong-list">
+            <li v-for="item in group.wrong" :key="item.question.id">
+              <button type="button" @click="goTo(item.conceptId)">
+                <span class="concept">{{ item.number ? `第 ${item.number} 題・` : '' }}{{ item.conceptTitle }}</span>
+                <span class="stem">{{ item.question.stem }}</span>
+              </button>
+            </li>
+          </ul>
+        </details>
+      </template>
 
       <h3>升級音效</h3>
       <button
@@ -140,7 +169,7 @@ summary::-webkit-details-marker {
   top: calc(100% + 0.5rem);
   right: 0;
   z-index: 10;
-  width: min(360px, 90vw);
+  width: min(420px, 90vw);
   max-height: 70vh;
   padding: 1rem;
   overflow-y: auto;
@@ -173,6 +202,76 @@ p {
 .hint {
   color: #777;
   font-size: 0.85rem;
+}
+
+.subject-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.subject-tabs button {
+  flex: 1;
+  min-height: 44px;
+  border: 2px solid #2b2633;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.subject-tabs button[aria-pressed='true'] {
+  background: #2b2633;
+  color: #fff;
+}
+
+.paper {
+  border-bottom: 1px solid #ece4d2;
+}
+
+.paper > summary {
+  display: grid;
+  min-height: 44px;
+  padding: 0.4rem 0.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.paper > summary:hover,
+.paper > summary:focus-visible {
+  background: #f3ecdc;
+}
+
+.paper-title {
+  font-weight: 700;
+}
+
+.paper-title::before {
+  display: inline-block;
+  width: 1.1em;
+  color: #8a7f6c;
+  content: '▶';
+  font-size: 0.75em;
+  transition: transform 0.15s;
+}
+
+.paper[open] .paper-title::before {
+  transform: rotate(90deg);
+}
+
+.paper-score {
+  padding-left: 1em;
+  color: #556274;
+  font-size: 0.85rem;
+}
+
+.paper > .empty {
+  padding: 0 0.25rem 0.5rem 1.25rem;
 }
 
 .wrong-list {

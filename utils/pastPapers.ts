@@ -15,6 +15,8 @@ export const NO_EXPLANATION = '答案依 iPAS 官方公告'
 export const PRIVATE_BANK_MISSING = '讀不到私人題庫'
 // 考科對應的島：第一科＝L11 人工智慧基礎概論、第二科＝L12 生成式 AI 應用與規劃
 export const PAPER_SUBJECT: Record<number, string> = { 1: 'L11', 2: 'L12' }
+// 一次考試每一科 50 題；錯題本用來算「這次錯幾題／50」
+export const PAPER_SIZE = 50
 
 const DIGITS = '〇一二三四五六七八九'
 
@@ -35,8 +37,13 @@ export function sessionLabel(session: string) {
   return parsed ? `${parsed.year} 年第${chineseNumber(parsed.round)}次` : session
 }
 
+// "114 年第四次 第一科"
+export function paperLabel(session: string, paper: number) {
+  return `${sessionLabel(session)} 第${chineseNumber(paper)}科`
+}
+
 export function examLabel(exam: PastExam) {
-  return `${sessionLabel(exam.session)} 第${chineseNumber(exam.paper)}科 第 ${exam.number} 題`
+  return `${paperLabel(exam.session, exam.paper)} 第 ${exam.number} 題`
 }
 
 // 依梯次、考科、題號由舊到新排序
