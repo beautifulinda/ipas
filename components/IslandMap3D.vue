@@ -137,6 +137,10 @@ function flyToFocus(animate: boolean) {
     to[0] = town.clone().add(to[0].clone().sub(to[1]).multiplyScalar(0.5))
     to[1] = town
   }
+  flyTo(to, animate)
+}
+
+function flyTo(to: [THREE.Vector3, THREE.Vector3], animate: boolean) {
   if (!animate || reduceMotion()) {
     camera.position.copy(to[0])
     controls.target.copy(to[1])
@@ -144,6 +148,18 @@ function flyToFocus(animate: boolean) {
     return
   }
   flight = { from: [camera.position.clone(), controls.target.clone()], to, t: 0 }
+}
+
+// 右上角的鏡頭按鈕：只移動鏡頭，不換主題，右側面板與作答狀態都保留
+function viewAll() {
+  if (!renderer || !world) return
+  showcase = undefined
+  flyTo(viewFor(world.bounds.get('root')!), true)
+}
+
+function viewCurrent() {
+  showcase = undefined
+  flyToFocus(true)
 }
 
 function applyViewport() {
@@ -548,6 +564,10 @@ watch(
         {{ label.text }}
       </div>
     </div>
+    <div class="camera-tools">
+      <button type="button" @click="viewAll">看全部</button>
+      <button v-if="focusNode.depth > 0" type="button" @click="viewCurrent">回到目前主題</button>
+    </div>
     <!-- 鍵盤與螢幕閱讀器的導覽：目前這一層可以前往的位置 -->
     <nav class="sr-nav" aria-label="地圖導覽">
       <button v-if="startId" type="button" @click="emit('start', startId)">從這裡開始：{{ startTitle }}</button>
@@ -693,6 +713,39 @@ watch(
   .tag--start {
     animation: none;
   }
+}
+
+/* 鏡頭按鈕：右上角，避開手機左上角的返回按鈕 */
+.camera-tools {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.camera-tools button {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 2px solid #2b2633;
+  border-radius: 999px;
+  background: rgba(255, 253, 244, 0.92);
+  box-shadow: 0 3px 0 rgba(43, 38, 51, 0.3);
+  color: #2b2633;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.camera-tools button:hover {
+  background: #ffe9a8;
+}
+
+.camera-tools button:focus-visible {
+  outline: 3px solid #4f8cff;
+  outline-offset: 2px;
 }
 
 /* 平常隱藏，用 Tab 鍵移到時才出現在左下角 */
