@@ -400,7 +400,7 @@ body {
 
 /* 作答中：題目是主角，面板再加寬，地圖只需看到目前這棟建築 */
 .main.has-panel.answering {
-  grid-template-columns: 1fr clamp(420px, 44vw, 760px);
+  grid-template-columns: 1fr clamp(420px, 60vw, 1200px);
 }
 
 .map-area {

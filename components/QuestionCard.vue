@@ -154,9 +154,20 @@ function optionState(id: string) {
   }
 }
 
+.question {
+  container-type: inline-size;
+}
+
 .options {
   display: grid;
   gap: 0.5rem;
+}
+
+/* 面板夠寬時（桌面作答）選項排成兩欄，左到右、上到下是 A B／C D；手機與窄面板維持一欄 */
+@container (min-width: 720px) {
+  .options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .option {
