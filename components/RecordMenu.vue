@@ -2,7 +2,7 @@
 import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
 import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
-import { wrongBookBySubject } from '~/utils/wrongBook'
+import { groupEmptyText, groupScoreLabel, subjectTabLabel, wrongBookBySubject } from '~/utils/wrongBook'
 
 const props = defineProps<{ map: TopicMap }>()
 const emit = defineEmits<{ navigate: [conceptId: string] }>()
@@ -23,7 +23,6 @@ const subjectId = ref<string>()
 const currentSubject = computed(
   () => subjects.value.find((s) => s.id === subjectId.value) ?? subjects.value.find((s) => s.wrongCount) ?? subjects.value[0],
 )
-const percent = (n: number, total: number) => `${Math.round((n / total) * 100)}%`
 
 const message = ref('')
 const fileInput = ref<HTMLInputElement>()
@@ -72,7 +71,7 @@ async function onImport(event: Event) {
           :aria-pressed="subject.id === currentSubject?.id"
           @click="subjectId = subject.id"
         >
-          {{ subject.id }}・錯 {{ subject.wrongCount }}
+          {{ subjectTabLabel(subject) }}
         </button>
       </div>
       <template v-if="currentSubject">
@@ -80,12 +79,9 @@ async function onImport(event: Event) {
         <details v-for="group in currentSubject.groups" :key="group.key" class="paper" :open="group.wrong.length > 0 && group.wrong.length <= 5">
           <summary>
             <span class="paper-title">{{ group.title }}</span>
-            <span v-if="group.size" class="paper-score">
-              錯 {{ group.wrong.length }}／{{ group.size }}（{{ percent(group.wrong.length, group.size) }}）・已作答 {{ group.answered }} 題
-            </span>
-            <span v-else class="paper-score">錯 {{ group.wrong.length }} 題</span>
+            <span class="paper-score">{{ groupScoreLabel(group) }}</span>
           </summary>
-          <p v-if="!group.wrong.length" class="empty">{{ group.answered ? '這次沒有錯題。' : '還沒作答這次的題目。' }}</p>
+          <p v-if="!group.wrong.length" class="empty">{{ groupEmptyText(group) }}</p>
           <ul v-else class="wrong-list">
             <li v-for="item in group.wrong" :key="item.question.id">
               <button type="button" @click="goTo(item.conceptId)">

@@ -77,3 +77,19 @@ export function wrongBookBySubject(
     return { id: subject.id, title: subject.title, wrongCount: wrongInSubject.size, groups }
   })
 }
+
+// 畫面上的文字：分頁「L11・錯 1」、梯次「錯 5／50（10%）・已作答 7 題」、自編題「錯 1 題」
+export function subjectTabLabel(subject: WrongSubject) {
+  return `${subject.id}・錯 ${subject.wrongCount}`
+}
+
+export function groupScoreLabel(group: WrongGroup) {
+  const count = group.wrong.length
+  if (!group.size) return `錯 ${count} 題`
+  return `錯 ${count}／${group.size}（${Math.round((count / group.size) * 100)}%）・已作答 ${group.answered} 題`
+}
+
+// 梯次沒有錯題時，展開後顯示的文字
+export function groupEmptyText(group: WrongGroup) {
+  return group.answered ? '這次沒有錯題。' : '還沒作答這次的題目。'
+}

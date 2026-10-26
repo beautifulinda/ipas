@@ -15,6 +15,7 @@ export default defineConfig({
       'tests/features/common.steps.ts',
       'tests/features/progression.steps.ts',
       'tests/features/wrongBook.steps.ts',
+      'tests/features/wrongBookGroups.steps.ts',
       'tests/features/feedback.steps.ts',
       'tests/features/pastPapers.steps.ts',
       'tests/features/celebration.steps.ts',
