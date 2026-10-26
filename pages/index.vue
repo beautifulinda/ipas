@@ -221,7 +221,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       <MapBreadcrumb :path="path" @navigate="focusId = $event" />
     </header>
 
-    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile }" :inert="quizShown">
+    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile, answering: answering && !isMobile }" :inert="quizShown">
       <div class="map-area">
         <IslandMap3D
           v-if="view === 'map'"
@@ -393,9 +393,14 @@ body {
   overflow: hidden;
 }
 
-/* 桌面：概念面板在右側，地圖保持可見 */
+/* 桌面：概念面板在右側，地圖保持可見；寬螢幕跟著放寬，題目才不會擠成一長條 */
 .main.has-panel {
-  grid-template-columns: 1fr minmax(320px, 400px);
+  grid-template-columns: 1fr clamp(360px, 32vw, 560px);
+}
+
+/* 作答中：題目是主角，面板再加寬，地圖只需看到目前這棟建築 */
+.main.has-panel.answering {
+  grid-template-columns: 1fr clamp(420px, 44vw, 760px);
 }
 
 .map-area {

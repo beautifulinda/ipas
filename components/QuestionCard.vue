@@ -132,7 +132,9 @@ function optionState(id: string) {
 
 .stem {
   margin: 0 0 0.75rem;
+  font-size: 1.15rem;
   font-weight: 600;
+  line-height: 1.6;
 }
 
 .stem + .source {
@@ -168,6 +170,8 @@ function optionState(id: string) {
   background: #fff;
   color: inherit;
   font: inherit;
+  font-size: 1.05rem;
+  line-height: 1.55;
   text-align: left;
   cursor: pointer;
 }
