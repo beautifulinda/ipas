@@ -105,6 +105,21 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+// 作答模式會把面板放寬、選項跟著移位。用滑鼠時若在按下去（focusin）就切換，放開時指標已不在原本的選項上，
+// 這次點擊會被吃掉；所以滑鼠等點擊完成（capture 階段，選項自己的 click 照常處理）才切換，鍵盤維持 focusin
+let pointerEngaging = false
+
+function onFocusin() {
+  if (!pointerEngaging) emit('engage')
+}
+
+function onClickCapture(event: MouseEvent) {
+  if (!pointerEngaging) return
+  pointerEngaging = false
+  // 和 focusin 一樣，只有點到按鈕、連結這類會拿到焦點的元素才算開始作答
+  if ((event.target as HTMLElement).closest('button, a')) emit('engage')
+}
+
 function statusOf(questionId: string) {
   const attempt = latest.value.get(questionId)
   if (!attempt) return { label: '未作答', className: 'none' }
@@ -113,7 +128,14 @@ function statusOf(questionId: string) {
 </script>
 
 <template>
-  <section class="practice" @focusin="emit('engage')" @keydown="onKeydown">
+  <section
+    class="practice"
+    @pointerdown="pointerEngaging = true"
+    @pointercancel="pointerEngaging = false"
+    @focusin="onFocusin"
+    @click.capture="onClickCapture"
+    @keydown="onKeydown"
+  >
     <h3>練習題</h3>
     <p v-if="!questions.length" class="empty">這個主題還沒有練習題。</p>
     <template v-else>
