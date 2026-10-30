@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { CRYSTAL_COLOR, CRYSTAL_TOP, type Theme3D } from '~/utils/scene/palette'
+import type { Theme3D } from '~/utils/scene/palette'
 
 // 低多邊形模型：原點在底部中央，y 軸朝上。全部用平面著色（flatShading）做出面感
 
@@ -140,10 +140,10 @@ export function makeCloud(random: () => number) {
   // 扁平、半透明，看得出底下的地形與工地；不寫入深度，後面的建築不會被雲整個遮掉
   const group = new THREE.Group()
   const material = new THREE.MeshLambertMaterial({
-    color: '#e6f7f4',
+    color: '#ffffff',
     flatShading: true,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.4,
     depthWrite: false,
   })
   const count = 2 + Math.floor(random() * 2)
@@ -295,21 +295,4 @@ export function makeDustRing(center: THREE.Vector3, radius: number): Effect {
       material.dispose()
     },
   }
-}
-
-// 浮在海面上空的水晶岩：上下兩個錐體拼成菱形晶塊，頂端一小片草
-export function makeCrystalRock(random: () => number) {
-  const group = new THREE.Group()
-  const radius = 6 + random() * 9
-  const material = mat(CRYSTAL_COLOR, { emissive: '#0b5560', emissiveIntensity: 0.6 })
-  const lower = jitter(new THREE.ConeGeometry(radius, radius * 1.7, 6, 2), radius * 0.25, random)
-  lower.rotateX(Math.PI)
-  group.add(mesh(lower, material, -radius * 0.85))
-  group.add(mesh(jitter(new THREE.ConeGeometry(radius, radius * 0.7, 6, 1), radius * 0.2, random, false), material, radius * 0.35))
-  const grass = mesh(new THREE.IcosahedronGeometry(radius * 0.35, 0), mat(CRYSTAL_TOP), radius * 0.62)
-  grass.scale.y = 0.4
-  group.add(grass)
-  group.traverse((o) => (o.castShadow = false))
-  group.rotation.set((random() - 0.5) * 0.4, random() * Math.PI, (random() - 0.5) * 0.4)
-  return group
 }
