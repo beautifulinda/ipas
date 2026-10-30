@@ -19,7 +19,7 @@ Given(/^「(.+)」已經是房子$/, (world: World, title) => {
 })
 
 Then(/^「(.+)」的進度圓餅顯示 (\d+)／(\d+)$/, (world: World, title, correct, total) => {
-  expect(progression(world).townProgress.get(findConcept(world, title).id)).toEqual({
+  expect(progression(world).townProgress.get(findConcept(world, title).id)).toMatchObject({
     correct: Number(correct),
     total: Number(total),
   })

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { buildWorld, seededRandom, type BBox } from '~/utils/islandLayout'
 import type { MapNode } from '~/utils/mapTree'
-import type { CelebrationPlan, Progression } from '~/utils/progression'
+import { progressText, type CelebrationPlan, type Progression } from '~/utils/progression'
 import { makeFireworks, makeLightPillar, makeMarker, makeStarBurst, type Effect } from '~/utils/scene/models'
 import { SEA_COLOR, SKY_COLOR } from '~/utils/scene/palette'
 import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
@@ -57,8 +57,8 @@ interface Label {
   anchor: string
   kind: LabelKind
   text: string
-  // 城鎮的答對比例（0～1），畫成進度圓餅
-  progress?: { ratio: number; text: string }
+  // 城鎮的答對、答錯比例（0～1），畫成進度圓餅；tally 只在目前選到的城鎮顯示
+  progress?: { correct: number; wrong: number; text: string; tally?: string }
 }
 // 作答中只顯示「作答中」的提示，不顯示「從這裡開始」
 const answeringHere = computed(() => props.answering && focusNode.value.depth === 3)
@@ -79,7 +79,12 @@ const labels = computed<Label[]>(() => [
         anchor: t.id,
         kind: 'town' as const,
         text: t.data.title,
-        progress: progress && { ratio: progress.correct / progress.total, text: `答對 ${progress.correct}／${progress.total}` },
+        progress: progress && {
+          correct: progress.correct / progress.total,
+          wrong: progress.wrong / progress.total,
+          text: progressText(progress),
+          tally: focusNode.value.depth === 3 && t.id === focusId.value ? progressText(progress) : undefined,
+        },
       }
     }),
 ])
@@ -558,10 +563,11 @@ watch(
         <span
           v-if="label.progress"
           class="pie"
-          :style="{ '--ratio': label.progress.ratio }"
+          :style="{ '--correct': label.progress.correct, '--wrong': label.progress.wrong }"
           :title="label.progress.text"
         />
         {{ label.text }}
+        <span v-if="label.progress?.tally" class="tally">{{ label.progress.tally }}</span>
       </div>
     </div>
     <div class="camera-tools">
@@ -647,14 +653,30 @@ watch(
   font-size: 13px;
 }
 
-/* 答對比例的圓餅：綠色是答對的部分 */
+/* 進度圓餅：綠色是答對、紅色斜線是答錯、灰色是還沒作答；
+   紅綠色弱分不出兩色，所以答錯那塊挖空，露出底下的斜線 */
 .pie {
   flex: none;
   width: 14px;
   height: 14px;
   border: 1.5px solid #2b2633;
   border-radius: 50%;
-  background: conic-gradient(#3a9a4a calc(var(--ratio) * 360deg), #e8e2d4 0);
+  background:
+    conic-gradient(
+      #3a9a4a calc(var(--correct) * 360deg),
+      transparent 0 calc((var(--correct) + var(--wrong)) * 360deg),
+      #e8e2d4 0
+    ),
+    repeating-linear-gradient(45deg, #d9534f 0 2px, #f6d5d3 2px 3.5px);
+}
+
+/* 目前選到的城鎮旁的數字 */
+.tally {
+  padding-left: 0.35rem;
+  border-left: 1px solid #d6d0c4;
+  color: #4a453d;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .tag--start {

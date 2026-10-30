@@ -14,9 +14,23 @@ export const TOWN_LEVEL_NAMES: Record<TownLevel, string> = {
 }
 
 export interface TownProgress {
-  // 最近一次答對的題數
+  // 最近一次答對、答錯的題數；其餘是還沒作答
   correct: number
+  wrong: number
   total: number
+}
+
+// 目前選到的城鎮旁顯示的數字（需求在 tests/features/練習回饋.feature）；
+// 不能只靠紅綠區分，所以加 ✓／✗ 符號，沒有的項目不顯示
+export function progressText(progress: TownProgress) {
+  const unanswered = progress.total - progress.correct - progress.wrong
+  return [
+    progress.correct && `✓ ${progress.correct}`,
+    progress.wrong && `✗ ${progress.wrong}`,
+    unanswered && `未答 ${unanswered}`,
+  ]
+    .filter(Boolean)
+    .join('・')
 }
 
 export interface Progression {
@@ -65,7 +79,11 @@ export function computeProgression(map: TopicMap, attempts: readonly Attempt[]):
         else if (questions.length && correct.length * 2 >= questions.length) level = 2
         else if (correct.length) level = 1
         result.townLevels.set(concept.id, level)
-        if (questions.length) result.townProgress.set(concept.id, { correct: correct.length, total: questions.length })
+        if (questions.length) result.townProgress.set(concept.id, {
+            correct: correct.length,
+            wrong: answered.length - correct.length,
+            total: questions.length,
+          })
 
         if (answered.length) {
           result.practicedTowns.add(concept.id)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { celebrationFor, computeProgression, featuredMilestone, newMilestones, type Milestone } from '~/utils/progression'
+import { celebrationFor, computeProgression, featuredMilestone, newMilestones, progressText, type Milestone } from '~/utils/progression'
 import { attempt, concept, question, sampleMap } from './fixtures'
 
 describe('computeProgression：城鎮等級', () => {
@@ -129,5 +129,17 @@ describe('celebrationFor：升級演出依等級加碼', () => {
 
   it('沒有新的里程碑就沒有演出', () => {
     expect(celebrationFor([], normal)).toBeUndefined()
+  })
+})
+
+describe('城鎮旁的題數', () => {
+  it('依序寫答對、答錯、還沒作答', () => {
+    expect(progressText({ correct: 27, wrong: 7, total: 55 })).toBe('✓ 27・✗ 7・未答 21')
+  })
+
+  it('沒有的項目不寫出來', () => {
+    expect(progressText({ correct: 4, wrong: 0, total: 4 })).toBe('✓ 4')
+    expect(progressText({ correct: 0, wrong: 2, total: 2 })).toBe('✗ 2')
+    expect(progressText({ correct: 0, wrong: 0, total: 3 })).toBe('未答 3')
   })
 })
