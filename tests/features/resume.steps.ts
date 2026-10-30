@@ -3,17 +3,8 @@ import { Given, Then, When } from 'quickpickle'
 import { expect } from 'vitest'
 import { practiceQuestions } from '~/utils/concepts'
 import { resumeIndex } from '~/utils/progress'
-import { answer, findConcept, mainConcept, type World } from './world'
-
-// 「1～3」「1、2、4」這兩種寫法都轉成題號清單
-function numbers(text: string) {
-  const range = text.match(/^(\d+)～(\d+)$/)
-  if (range) {
-    const [from, to] = [Number(range[1]), Number(range[2])]
-    return Array.from({ length: to - from + 1 }, (_, i) => from + i)
-  }
-  return text.split('、').map(Number)
-}
+import { groupOf } from '~/utils/questionGroups'
+import { answer, findConcept, mainConcept, numbers, type World } from './world'
 
 const allNumbers = (world: World) => practiceQuestions(mainConcept(world)).map((_, i) => i + 1)
 
@@ -42,6 +33,9 @@ Given(/^我已經答對全部 (\d+) 題$/, (world: World, total) => {
 function open(world: World, title: string) {
   const ids = practiceQuestions(findConcept(world, title)).map((q) => q.id)
   world.resume = resumeIndex(ids, world.attempts) + 1
+  // 題號列顯示目前這題所在的組（題號分組.feature）
+  world.opened = title
+  world.shownGroup = groupOf(world.resume - 1)
 }
 
 When(/^我離開「(.+)」再回來$/, (world: World, title) => open(world, title))

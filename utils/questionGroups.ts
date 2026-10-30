@@ -27,3 +27,13 @@ export function questionGroups(count: number): QuestionGroup[] {
 export function groupOf(index: number): number {
   return Math.floor(index / GROUP_SIZE)
 }
+
+/** 題號列要顯示哪一段（start 到 end 前一題，從 0 起算）；不分組時顯示全部 */
+export function shownRange(count: number, group: number) {
+  return questionGroups(count)[group] ?? { start: 0, end: count }
+}
+
+/** 分組按鈕上的進度，例如「答對 8／10」 */
+export function groupProgressText(group: QuestionGroup, correct: number) {
+  return `答對 ${correct}／${group.end - group.start}`
+}

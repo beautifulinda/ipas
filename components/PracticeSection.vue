@@ -2,7 +2,7 @@
 import type { Concept } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import { DISMISS_PROMPT, latestByQuestion, resumeIndex, shouldAskDismiss, type Attempt } from '~/utils/progress'
-import { groupOf, questionGroups } from '~/utils/questionGroups'
+import { groupOf, groupProgressText, questionGroups, shownRange } from '~/utils/questionGroups'
 
 const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
 // engage：使用者開始操作題目（點了或用鍵盤進入），地圖切成作答模式；position：目前是第幾題（從 1 起算）
@@ -49,9 +49,8 @@ const shownGroup = ref(groupOf(index.value))
 // 換主題時題號可能剛好沒變，所以主題也要看
 watch([index, () => props.concept.id], () => (shownGroup.value = groupOf(index.value)))
 const shownQuestions = computed(() => {
-  const group = groups.value[shownGroup.value]
-  const list = questions.value.map((question, i) => ({ question, i }))
-  return group ? list.slice(group.start, group.end) : list
+  const { start, end } = shownRange(questions.value.length, shownGroup.value)
+  return questions.value.map((question, i) => ({ question, i })).slice(start, end)
 })
 function correctIn(start: number, end: number) {
   return questions.value.slice(start, end).filter((q) => latest.value.get(q.id)?.correct).length
@@ -167,7 +166,7 @@ function statusOf(questionId: string) {
           @click="shownGroup = g"
         >
           <span class="group-label">{{ group.label }}</span>
-          <span class="group-count">答對 {{ correctIn(group.start, group.end) }}／{{ group.end - group.start }}</span>
+          <span class="group-count">{{ groupProgressText(group, correctIn(group.start, group.end)) }}</span>
         </button>
       </div>
       <nav class="question-nav" aria-label="題目">

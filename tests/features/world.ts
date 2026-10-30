@@ -23,8 +23,13 @@ export interface World {
   soundError?: unknown
   // 畫面上正在詢問的訊息與對應題目
   prompt?: { text: string; questionId: string }
-  // 打開主題時畫面停在第幾題（從 1 起算）
+  // 打開主題時畫面停在第幾題（從 1 起算）；換題後是目前這題
   resume?: number
+  // 打開的主題、題號列正在顯示第幾組（從 0 起算）
+  opened?: string
+  shownGroup?: number
+  // 地圖上選到的主題
+  selected?: string
   clock: number
 }
 
@@ -53,12 +58,25 @@ export function setup(world: World, region: string, title: string, count: number
   world.storage = new Map()
   world.prompt = undefined
   world.resume = undefined
+  world.opened = undefined
+  world.shownGroup = undefined
+  world.selected = undefined
   world.clock = 0
 }
 
 function tick(world: World) {
   world.clock += 1
   return new Date(Date.UTC(2026, 0, 1, 0, 0, world.clock)).toISOString()
+}
+
+// 「1～3」「1、2、4」這兩種寫法都轉成題號清單
+export function numbers(text: string) {
+  const range = text.match(/^(\d+)～(\d+)$/)
+  if (range) {
+    const [from, to] = [Number(range[1]), Number(range[2])]
+    return Array.from({ length: to - from + 1 }, (_, i) => from + i)
+  }
+  return text.split('、').map(Number)
 }
 
 export function findConcept(world: World, title: string) {

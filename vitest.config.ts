@@ -20,6 +20,7 @@ export default defineConfig({
       'tests/features/pastPapers.steps.ts',
       'tests/features/celebration.steps.ts',
       'tests/features/resume.steps.ts',
+      'tests/features/questionGroups.steps.ts',
     ],
   },
 })
