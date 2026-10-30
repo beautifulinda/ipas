@@ -6,6 +6,7 @@ import type { Progression, TownLevel } from '~/utils/progression'
 import { makeBuilding, type BuildingTick } from '~/utils/scene/buildings'
 import {
   makeCloud,
+  makeCrystalRock,
   makeFlag,
   makeHill,
   makeLighthouse,
@@ -113,7 +114,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
     // 白色浪花圈
     const foam = new THREE.Mesh(
       new THREE.ShapeGeometry(shapeFromRing(scaleToward(coast, center, 1 + 7 / radius), [coast.slice().reverse()])),
-      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75 }),
+      new THREE.MeshBasicMaterial({ color: '#cfeff5', transparent: true, opacity: 0.55 }),
     )
     foam.geometry.rotateX(-Math.PI / 2)
     foam.position.y = 0.6
@@ -140,7 +141,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
       const fog = new THREE.Group()
       const mist = new THREE.Mesh(
         new THREE.ShapeGeometry(shapes),
-        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#d8f3ee', transparent: true, opacity: 0.3, depthWrite: false }),
       )
       mist.geometry.rotateX(-Math.PI / 2)
       mist.position.y = SAND_TOP + height + 1.5
@@ -181,6 +182,8 @@ export function buildWorld3D(world: WorldLayout): World3D {
               ? makePine(theme, random)
               : makeTree(theme, random)
       model.position.set(item.flat[0], groundAt(item.flat) - 0.5, item.flat[1])
+      // 樹畫大一點，一群一群連成樹林
+      if (item.kind === 'tree' || item.kind === 'pine') model.scale.multiplyScalar(1.3)
       islandGroup.add(model)
     }
 
@@ -225,6 +228,28 @@ export function buildWorld3D(world: WorldLayout): World3D {
         ]
       : [-100, -100, 100, 100],
   )
+
+  // 浮空水晶岩：散在島與島之間、島外圍的海面上空，避開島的範圍，才不會擋住城鎮
+  const crystals: { object: THREE.Object3D; y: number; phase: number }[] = []
+  {
+    const random = seededRandom('crystals')
+    const [x0, z0, x1, z1] = bounds.get('root')!
+    const margin = 260
+    // 鏡頭從前方（z 較大）斜看，浮在空中的岩石看起來會往前移，所以前方多留一些距離
+    const overIsland = (x: number, z: number) =>
+      islandBoxes.some((b) => x > b[0] - 40 && x < b[2] + 40 && z > b[1] - 40 && z < b[3] + 160)
+    for (let i = 0, attempt = 0; i < 26 && attempt < 400; attempt++) {
+      const x = x0 - margin + random() * (x1 - x0 + margin * 2)
+      const z = z0 - margin + random() * (z1 - z0 + margin * 2)
+      if (overIsland(x, z)) continue
+      const rock = makeCrystalRock(random)
+      const y = 50 + random() * 90
+      rock.position.set(x, y, z)
+      root.add(rock)
+      crystals.push({ object: rock, y, phase: random() * Math.PI * 2 })
+      i++
+    }
+  }
 
   function applyProgression(progression: Progression, animate: boolean) {
     for (const [id, town] of towns) {
@@ -337,6 +362,12 @@ export function buildWorld3D(world: WorldLayout): World3D {
       }
       const cloth = flag.flag.getObjectByName('cloth')
       if (cloth) cloth.rotation.y = Math.sin(time * 3) * 0.25
+    }
+    if (motion) {
+      for (const crystal of crystals) {
+        crystal.object.position.y = crystal.y + Math.sin(time * 0.6 + crystal.phase) * 3
+        crystal.object.rotation.y += dt * 0.08
+      }
     }
     for (const lighthouse of lighthouses.values()) {
       const beam = lighthouse.group.getObjectByName('beam')

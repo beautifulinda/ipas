@@ -251,7 +251,7 @@ function scatterDecor(
   }
 
   // 樹林：一群一群，往群聚中心集中
-  const clusterCount = Math.max(6, Math.round(area / 3000))
+  const clusterCount = Math.max(8, Math.round(area / 1800))
   for (let c = 0; c < clusterCount; c++) {
     // 群聚中心要落在陸地上，試 20 次都落在海上就放在島中心
     let cx = center[0]
@@ -265,8 +265,8 @@ function scatterDecor(
         break
       }
     }
-    // 每群預定 4～8 棵，位置重疊就重抽，最多試八倍次數
-    const count = 4 + Math.floor(random() * 5)
+    // 每群預定 6～11 棵，位置重疊就重抽，最多試八倍次數
+    const count = 6 + Math.floor(random() * 6)
     for (let i = 0, attempt = 0; i < count && attempt < count * 8; attempt++) {
       const kind = random() < 0.45 ? 'pine' : 'tree'
       const x = cx + gaussian(random) * 18

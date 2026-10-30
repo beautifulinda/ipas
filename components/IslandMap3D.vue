@@ -450,6 +450,33 @@ function celebrate(plan: CelebrationPlan) {
     showcase = { t: 0, from: [camera.position.clone(), controls.target.clone()], center: base.clone().add(new THREE.Vector3(0, 12, 0)) }
   }
 }
+// 極光夜空：上方深藍、地平線青綠，加幾道淡淡的極光與星星（畫在背景，不佔 3D 物件）
+function makeSkyTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')!
+  const sky = ctx.createLinearGradient(0, 0, 0, 512)
+  sky.addColorStop(0, '#0b1f3f')
+  sky.addColorStop(0.55, '#155a6e')
+  sky.addColorStop(1, SKY_COLOR)
+  ctx.fillStyle = sky
+  ctx.fillRect(0, 0, 512, 512)
+  const random = seededRandom('sky')
+  for (const x of [120, 260, 400]) {
+    const glow = ctx.createLinearGradient(x - 40, 0, x + 40, 0)
+    glow.addColorStop(0, 'rgba(80, 230, 200, 0)')
+    glow.addColorStop(0.5, 'rgba(80, 230, 200, 0.22)')
+    glow.addColorStop(1, 'rgba(80, 230, 200, 0)')
+    ctx.fillStyle = glow
+    ctx.fillRect(x - 40, 0, 80, 360)
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+  for (let i = 0; i < 90; i++) ctx.fillRect(random() * 512, random() * 300, 1.5, 1.5)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
 function focusMap() {
   canvasEl.value?.focus({ preventScroll: true })
 }
@@ -469,12 +496,13 @@ onMounted(() => {
   renderer.shadowMap.type = THREE.PCFShadowMap
 
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(SKY_COLOR)
+  scene.background = makeSkyTexture()
   scene.fog = new THREE.Fog(SKY_COLOR, 1800, 4200)
 
   camera = new THREE.PerspectiveCamera(FOV, 1, 1, 8000)
-  scene.add(new THREE.HemisphereLight('#ffffff', '#6fa8c0', 1.6))
-  sun = new THREE.DirectionalLight('#fff4e0', 2.2)
+  // 天光偏青綠、地面反光偏深藍，配合極光夜空；主光仍夠亮，標籤與建築看得清楚
+  scene.add(new THREE.HemisphereLight('#c8f4ec', '#1d3f6e', 1.7))
+  sun = new THREE.DirectionalLight('#fff1dc', 2.1)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048, 2048)
   sun.shadow.camera.near = 1
@@ -484,7 +512,7 @@ onMounted(() => {
 
   // 海面：低多邊形，頂點隨時間起伏
   const oceanGeometry = new THREE.PlaneGeometry(5000, 5000, 90, 90)
-  ocean = new THREE.Mesh(oceanGeometry, new THREE.MeshLambertMaterial({ color: SEA_COLOR, flatShading: true }))
+  ocean = new THREE.Mesh(oceanGeometry, new THREE.MeshPhongMaterial({ color: SEA_COLOR, specular: '#7fd8ff', shininess: 60, flatShading: true }))
   ocean.rotation.x = -Math.PI / 2
   ocean.receiveShadow = true
   scene.add(ocean)
