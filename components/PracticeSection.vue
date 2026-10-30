@@ -2,6 +2,7 @@
 import type { Concept } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import { DISMISS_PROMPT, latestByQuestion, resumeIndex, shouldAskDismiss, type Attempt } from '~/utils/progress'
+import { groupOf, questionGroups } from '~/utils/questionGroups'
 
 const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
 // engage：使用者開始操作題目（點了或用鍵盤進入），地圖切成作答模式；position：目前是第幾題（從 1 起算）
@@ -40,6 +41,21 @@ watch(current, () => {
   dismissPrompt.value = undefined
 })
 watch(index, (i) => emit('position', i + 1), { immediate: true })
+
+// 超過 10 題時題號分組，一次只顯示一組（需求在 tests/features/題號分組.feature）；
+// 點組名只換顯示的題號、不換題，換到別組的題目時跟著顯示那一組
+const groups = computed(() => questionGroups(questions.value.length))
+const shownGroup = ref(groupOf(index.value))
+// 換主題時題號可能剛好沒變，所以主題也要看
+watch([index, () => props.concept.id], () => (shownGroup.value = groupOf(index.value)))
+const shownQuestions = computed(() => {
+  const group = groups.value[shownGroup.value]
+  const list = questions.value.map((question, i) => ({ question, i }))
+  return group ? list.slice(group.start, group.end) : list
+})
+function correctIn(start: number, end: number) {
+  return questions.value.slice(start, end).filter((q) => latest.value.get(q.id)?.correct).length
+}
 
 const card = ref<{ focusOptions: () => void; focusFeedback: () => void }>()
 const dismissEl = ref<HTMLElement>()
@@ -139,9 +155,24 @@ function statusOf(questionId: string) {
     <h3>練習題</h3>
     <p v-if="!questions.length" class="empty">這個主題還沒有練習題。</p>
     <template v-else>
+      <div v-if="groups.length" class="group-nav" role="group" aria-label="題號分組">
+        <button
+          v-for="(group, g) in groups"
+          :key="group.start"
+          type="button"
+          class="group"
+          :class="{ shown: g === shownGroup, current: g === groupOf(index) }"
+          :aria-pressed="g === shownGroup"
+          :aria-label="`第 ${group.label} 題，答對 ${correctIn(group.start, group.end)} 題`"
+          @click="shownGroup = g"
+        >
+          <span class="group-label">{{ group.label }}</span>
+          <span class="group-count">答對 {{ correctIn(group.start, group.end) }}／{{ group.end - group.start }}</span>
+        </button>
+      </div>
       <nav class="question-nav" aria-label="題目">
         <button
-          v-for="(question, i) in questions"
+          v-for="{ question, i } in shownQuestions"
           :key="question.id"
           type="button"
           class="chip"
@@ -180,6 +211,53 @@ h3 {
 .empty {
   margin: 0;
   color: #777;
+}
+
+.group-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0.2rem 0.6rem;
+  border: 2px solid #d6d0c4;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.group-label {
+  font-weight: 700;
+}
+
+.group-count {
+  font-size: 0.75rem;
+  color: #5f5a52;
+}
+
+/* 目前這題所在的組 */
+.group.current {
+  border-color: #4f8cff;
+}
+
+/* 正在顯示的組 */
+.group.shown {
+  background: #2b2633;
+  border-color: #2b2633;
+  color: #fff;
+}
+
+.group.shown .group-count {
+  color: #e6e1d8;
 }
 
 .question-nav {
