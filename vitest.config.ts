@@ -22,6 +22,7 @@ export default defineConfig({
       'tests/features/resume.steps.ts',
       'tests/features/questionGroups.steps.ts',
       'tests/features/nextStop.steps.ts',
+      'tests/features/marks.steps.ts',
     ],
   },
 })

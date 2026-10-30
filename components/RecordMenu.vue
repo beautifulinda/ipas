@@ -2,36 +2,59 @@
 import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
 import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
-import { groupEmptyText, groupScoreLabel, subjectTabLabel, wrongBookBySubject } from '~/utils/wrongBook'
+import { reviewList } from '~/utils/progress'
+import {
+  filterItems,
+  filterLabels,
+  groupEmptyText,
+  groupScoreLabel,
+  itemTags,
+  recordMenuLabel,
+  subjectTabLabel,
+  wrongBookBySubject,
+  type ReviewFilter,
+} from '~/utils/wrongBook'
 
 const props = defineProps<{ map: TopicMap }>()
-const emit = defineEmits<{ navigate: [conceptId: string] }>()
+// navigate：點複習清單的題目，前往主題並直接打開那一題
+const emit = defineEmits<{ navigate: [conceptId: string, questionId: string] }>()
 
-const { attempts, wrongQuestionIds, storageError, exportFile, importFile } = useRecords()
+const { attempts, wrongQuestionIds, markedQuestionIds, storageError, exportFile, importFile } = useRecords()
 const { soundOn, setSoundOn } = useSound()
 const index = computed(() => questionIndex(props.map))
 const knownIds = computed(() => new Set(index.value.keys()))
 // 已下架題目的作答紀錄保留在瀏覽器（重新上架時接得回來），但不算進統計
 const stats = computed(() => summary(knownAttempts(attempts.value, knownIds.value)))
 const removed = computed(() => removedQuestionIds(attempts.value, knownIds.value).length)
+// 已下架的題目不列在複習清單
 const wrong = computed(() => wrongQuestionIds.value.filter((id) => index.value.has(id)))
-// L11、L12 分開考，錯題本分科目看；考古題再依梯次分開，看這次錯幾題／50
+const marked = computed(() => markedQuestionIds.value.filter((id) => index.value.has(id)))
+const reviewCount = computed(() => reviewList(wrong.value, marked.value).length)
+// 複習清單（錯題加上自己標記不熟的題目，需求在 tests/features/標記不熟.feature）：L11、L12 分開考，分科目看；
+// 考古題再依梯次分開，看這次錯幾題／50
 const subjects = computed(() =>
-  wrongBookBySubject(props.map, wrong.value, new Set(knownAttempts(attempts.value, knownIds.value).map((a) => a.questionId))),
+  wrongBookBySubject(
+    props.map,
+    wrong.value,
+    new Set(knownAttempts(attempts.value, knownIds.value).map((a) => a.questionId)),
+    marked.value,
+  ),
 )
 const subjectId = ref<string>()
 const currentSubject = computed(
-  () => subjects.value.find((s) => s.id === subjectId.value) ?? subjects.value.find((s) => s.wrongCount) ?? subjects.value[0],
+  () => subjects.value.find((s) => s.id === subjectId.value) ?? subjects.value.find((s) => s.reviewCount) ?? subjects.value[0],
 )
+const filter = ref<ReviewFilter>('all')
+const filters: ReviewFilter[] = ['all', 'wrong', 'marked']
 
 const message = ref('')
 const fileInput = ref<HTMLInputElement>()
 const menu = ref<HTMLDetailsElement>()
 
-// 從錯題本跳到概念時，順便收起選單，不擋住面板
-function goTo(conceptId: string) {
+// 從複習清單跳到題目時，順便收起選單，不擋住面板
+function goTo(conceptId: string, questionId: string) {
   if (menu.value) menu.value.open = false
-  emit('navigate', conceptId)
+  emit('navigate', conceptId, questionId)
 }
 
 async function onImport(event: Event) {
@@ -51,8 +74,8 @@ async function onImport(event: Event) {
 <template>
   <details ref="menu" class="records">
     <summary>
-      <span class="long">學習紀錄（錯題 {{ wrong.length }}）</span>
-      <span class="short" aria-hidden="true">紀錄・錯題 {{ wrong.length }}</span>
+      <span class="long">{{ recordMenuLabel(reviewCount) }}</span>
+      <span class="short" aria-hidden="true">紀錄・複習 {{ reviewCount }}</span>
     </summary>
     <div class="records-body">
       <p v-if="storageError" class="warning">{{ storageError }}</p>
@@ -62,7 +85,7 @@ async function onImport(event: Event) {
       </p>
       <p v-if="removed" class="hint">{{ removedNotice(removed) }}</p>
 
-      <h3>錯題本</h3>
+      <h3>複習清單</h3>
       <div class="subject-tabs" role="group" aria-label="科目">
         <button
           v-for="subject in subjects"
@@ -75,17 +98,36 @@ async function onImport(event: Event) {
         </button>
       </div>
       <template v-if="currentSubject">
+        <div class="filters" role="group" aria-label="篩選">
+          <button
+            v-for="key in filters"
+            :key="key"
+            type="button"
+            :aria-pressed="filter === key"
+            @click="filter = key"
+          >
+            {{ filterLabels(currentSubject)[key] }}
+          </button>
+        </div>
         <p v-if="!currentSubject.groups.length" class="empty">{{ currentSubject.title }}目前沒有題目。</p>
-        <details v-for="group in currentSubject.groups" :key="group.key" class="paper" :open="group.wrong.length > 0 && group.wrong.length <= 5">
+        <details
+          v-for="group in currentSubject.groups"
+          :key="group.key"
+          class="paper"
+          :open="filterItems(group.items, filter).length > 0 && filterItems(group.items, filter).length <= 5"
+        >
           <summary>
             <span class="paper-title">{{ group.title }}</span>
             <span class="paper-score">{{ groupScoreLabel(group) }}</span>
           </summary>
-          <p v-if="!group.wrong.length" class="empty">{{ groupEmptyText(group) }}</p>
+          <p v-if="!filterItems(group.items, filter).length" class="empty">{{ groupEmptyText(group) }}</p>
           <ul v-else class="wrong-list">
-            <li v-for="item in group.wrong" :key="item.question.id">
-              <button type="button" @click="goTo(item.conceptId)">
-                <span class="concept">{{ item.number ? `第 ${item.number} 題・` : '' }}{{ item.conceptTitle }}</span>
+            <li v-for="item in filterItems(group.items, filter)" :key="item.question.id">
+              <button type="button" @click="goTo(item.conceptId, item.question.id)">
+                <span class="concept">
+                  {{ item.number ? `第 ${item.number} 題・` : '' }}{{ item.conceptTitle }}
+                  <span v-for="tag in itemTags(item)" :key="tag" class="tag" :class="tag === '答錯' ? 'tag-wrong' : 'tag-marked'">{{ tag }}</span>
+                </span>
                 <span class="stem">{{ item.question.stem }}</span>
               </button>
             </li>
@@ -222,6 +264,30 @@ p {
   color: #fff;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.filters button {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 2px solid #d6d0c4;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.filters button[aria-pressed='true'] {
+  border-color: #2b2633;
+  background: #f3ecdc;
+  font-weight: 700;
+}
+
 .paper {
   border-bottom: 1px solid #ece4d2;
 }
@@ -294,10 +360,30 @@ p {
   background: #f3ecdc;
 }
 
+/* 答錯或不熟由旁邊的標示表達，主題名稱用中性色 */
 .concept {
-  color: #b23b37;
+  color: #4a453d;
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.tag-wrong {
+  background: #fbe3e2;
+  color: #a1322e;
+}
+
+.tag-marked {
+  background: #fff1c7;
+  color: #6b5200;
 }
 
 .stem {

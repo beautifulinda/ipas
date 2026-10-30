@@ -4,7 +4,8 @@ import { practiceQuestions } from '~/utils/concepts'
 import { DISMISS_PROMPT, latestByQuestion, resumeIndex, shouldAskDismiss, type Attempt } from '~/utils/progress'
 import { groupOf, groupProgressText, questionGroups, shownRange } from '~/utils/questionGroups'
 
-const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
+// startQuestion：從複習清單點進來時要直接打開的題目
+const props = defineProps<{ concept: Concept; attempts: readonly Attempt[]; startQuestion?: string }>()
 // engage：使用者開始操作題目（點了或用鍵盤進入），地圖切成作答模式；position：目前是第幾題（從 1 起算）
 const emit = defineEmits<{
   answered: [questionId: string, choice: string, correct: boolean]
@@ -12,10 +13,14 @@ const emit = defineEmits<{
   position: [n: number]
 }>()
 
-const { dismissals, dismiss, ready } = useRecords()
+const { dismissals, dismiss, ready, markedQuestionIds, mark } = useRecords()
 const questions = computed(() => practiceQuestions(props.concept))
-// 打開主題時接著上次的進度：第一題還沒作答的題目（需求在 tests/features/繼續作答.feature）
-const startIndex = () => resumeIndex(questions.value.map((q) => q.id), [...props.attempts])
+// 打開主題時接著上次的進度：第一題還沒作答的題目（需求在 tests/features/繼續作答.feature）；
+// 從複習清單點進來時直接打開那一題
+function startIndex() {
+  const requested = questions.value.findIndex((q) => q.id === props.startQuestion)
+  return requested >= 0 ? requested : resumeIndex(questions.value.map((q) => q.id), [...props.attempts])
+}
 const index = ref(startIndex())
 const current = computed(() => questions.value[index.value])
 const latest = computed(() => latestByQuestion([...props.attempts]))
@@ -40,6 +45,28 @@ watch(ready, (value) => {
 watch(current, () => {
   dismissPrompt.value = undefined
 })
+// 從複習清單點了同一個主題的另一題時，主題沒變，要另外跳過去
+watch(
+  () => props.startQuestion,
+  () => {
+    const requested = questions.value.findIndex((q) => q.id === props.startQuestion)
+    if (requested >= 0) {
+      moved = true
+      index.value = requested
+    }
+  },
+)
+
+// 自己標記不熟（需求在 tests/features/標記不熟.feature）：答對也不會拿掉，只有按「我懂了」才拿掉；
+// 放在題目上方，送出答案後按 Tab 才會直接到「下一題」（無障礙.feature）；
+// 按鈕換掉後焦點移到新的按鈕，鍵盤與報讀軟體使用者才不會被丟回頁首
+const isMarked = computed(() => markedQuestionIds.value.includes(current.value.id))
+const markEl = ref<HTMLElement>()
+async function setMarked(marked: boolean) {
+  await mark(current.value.id, marked)
+  await nextTick()
+  markEl.value?.querySelector('button')?.focus()
+}
 watch(index, (i) => emit('position', i + 1), { immediate: true })
 
 // 超過 10 題時題號分組，一次只顯示一組（需求在 tests/features/題號分組.feature）；
@@ -183,6 +210,13 @@ function statusOf(questionId: string) {
           {{ i + 1 }}
         </button>
       </nav>
+      <div ref="markEl" class="mark" :class="{ marked: isMarked }">
+        <template v-if="isMarked">
+          <span class="mark-text">🔖 已標記不熟，會列在複習清單</span>
+          <button type="button" @click="setMarked(false)">我懂了</button>
+        </template>
+        <button v-else type="button" @click="setMarked(true)">🔖 標記不熟</button>
+      </div>
       <QuestionCard ref="card" :key="current.id" :question="current" @answered="onAnswered" />
       <div v-if="dismissPrompt === 'ask'" ref="dismissEl" class="dismiss" role="group" aria-labelledby="dismiss-text">
         <p id="dismiss-text">{{ DISMISS_PROMPT }}</p>
@@ -290,6 +324,37 @@ h3 {
 .chip.active {
   outline: 3px solid #4f8cff;
   outline-offset: 1px;
+}
+
+.mark {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.mark.marked {
+  padding: 0.4rem 0.5rem 0.4rem 0.75rem;
+  border-radius: 10px;
+  background: #fff1c7;
+}
+
+.mark-text {
+  color: #6b5200;
+  font-weight: 600;
+}
+
+.mark button {
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 2px solid #c9a227;
+  border-radius: 10px;
+  background: #fff;
+  color: #6b5200;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .dismiss {

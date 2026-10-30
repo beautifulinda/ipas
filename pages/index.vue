@@ -59,9 +59,12 @@ const quizOpen = ref(false)
 // 作答模式（桌面）：鍵盤在右邊的題目上，地圖放大到建築物；換主題就回到地圖模式（需求在 tests/features/鍵盤作答.feature）
 const answering = ref(false)
 const questionNumber = ref(1)
+// 從複習清單點進來時要直接打開的題目；換到別的主題就不再適用
+const reviewQuestion = ref<string>()
 watch(concept, () => {
   quizOpen.value = false
   answering.value = false
+  reviewQuestion.value = undefined
 })
 // 全螢幕作答時，背景的頁首、地圖、面板、頁尾設為 inert，Tab 與報讀軟體都不會跑到後面；升級卡不在其中，照樣唸得出來
 const quizShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value))
@@ -163,6 +166,21 @@ async function onStart(conceptId: string) {
   await enterAnswering()
 }
 
+// 點複習清單的題目：前往主題並直接打開那一題，手機開全螢幕作答、桌面進入作答模式（需求在 tests/features/標記不熟.feature）
+async function onReview(conceptId: string, questionId: string) {
+  focusId.value = conceptId
+  // 等換主題的處理（會清掉 reviewQuestion）跑完再指定題目
+  await nextTick()
+  reviewQuestion.value = questionId
+  await nextTick()
+  if (isMobile.value) {
+    quizOpen.value = true
+    return
+  }
+  document.querySelector('.practice')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  await enterAnswering()
+}
+
 // 進入作答：焦點移到題目的選項，報讀軟體會先唸出題目；主題沒有題目時不進入
 async function enterAnswering() {
   if (!concept.value || !practiceQuestions(concept.value).length) return
@@ -213,7 +231,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
             <button type="button" :aria-pressed="view === 'map'" @click="view = 'map'">地圖</button>
             <button type="button" :aria-pressed="view === 'list'" @click="view = 'list'">清單</button>
           </div>
-          <RecordMenu :map="map" @navigate="focusId = $event" />
+          <RecordMenu :map="map" @navigate="onReview" />
         </div>
       </div>
       <p class="disclaimer">
@@ -270,6 +288,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           class="panel-area"
           :concept="concept"
           ref="panelRef"
+          :start-question="reviewQuestion"
           :attempts="attempts"
           @close="goUp"
           @answered="onAnswered"
@@ -283,6 +302,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       v-if="concept && quizShown"
       :concept="concept"
       :attempts="attempts"
+      :start-question="reviewQuestion"
       @close="quizOpen = false"
       @answered="onAnswered"
     />

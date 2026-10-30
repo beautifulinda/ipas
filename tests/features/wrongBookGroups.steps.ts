@@ -152,7 +152,7 @@ Then(/^看得到「(.+)」和「(.+)」兩個分頁$/, (world: GroupWorld, a, b)
 
 Then(/^選 (L1\d) 時只列出 \1 的錯題$/, (world: GroupWorld, id) => {
   world.subject = id
-  const ids = currentSubject(world).groups.flatMap((g) => g.wrong.map((w) => w.question.id))
+  const ids = currentSubject(world).groups.flatMap((g) => g.items.map((w) => w.question.id))
   const own = new Set(world.map.subjects.find((s) => s.id === id)!.categories.flatMap((c) => c.concepts.flatMap((k) => k.questions.map((q) => q.id))))
   expect(ids.length).toBeGreaterThan(0)
   expect(ids.every((q) => own.has(q))).toBe(true)
@@ -170,21 +170,22 @@ Then('梯次由新到舊排列', (world: GroupWorld) => {
 
 Then('兩個梯次都顯示錯 1 題', (world: GroupWorld) => {
   const counts = currentSubject(world)
-    .groups.filter((g) => g.wrong.some((w) => w.question.id === world.target))
-    .map((g) => g.wrong.length)
+    .groups.filter((g) => g.items.some((w) => w.question.id === world.target))
+    .map((g) => g.items.filter((w) => w.wrong).length)
   expect(counts).toEqual([1, 1])
 })
 
 Then(/^(L1\d) 分頁只算錯 (\d+) 題$/, (world: GroupWorld, id, count) => {
   const subject = subjects(world).find((s) => s.id === id)!
-  expect(subjectTabLabel(subject)).toBe(`${id}・錯 ${count}`)
+  expect(subject.wrongCount).toBe(Number(count))
+  expect(subjectTabLabel(subject)).toBe(`${id}・複習 ${count}`)
 })
 
 Then(/^錯題列在「(.+)」，排在所有梯次之後$/, (world: GroupWorld, title) => {
   const last = currentSubject(world).groups.at(-1)!
   world.groupTitle = title
   expect(last.title).toBe(title)
-  expect(last.wrong.map((w) => w.question.id)).toEqual(['own-1'])
+  expect(last.items.map((w) => w.question.id)).toEqual(['own-1'])
 })
 
 Then('只顯示錯幾題，不顯示「／50」', (world: GroupWorld) => {

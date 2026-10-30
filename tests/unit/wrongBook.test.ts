@@ -51,16 +51,16 @@ describe('錯題本分組', () => {
 
   it('考古題依梯次由新到舊分組，每次都以 50 題為分母，並算出作答過幾題', () => {
     const [l11] = wrongBookBySubject(examMap(), ['a'], new Set(['a', 'b']))
-    expect(l11.groups.map((g) => [g.title, g.wrong.length, g.answered, g.size])).toEqual([
+    expect(l11.groups.map((g) => [g.title, g.items.length, g.answered, g.size])).toEqual([
       ['115 年第一次 第一科', 0, 1, 50],
       ['114 年第四次 第一科', 1, 2, 50],
     ])
-    expect(l11.groups[1].wrong[0].number).toBe(3)
+    expect(l11.groups[1].items[0].number).toBe(3)
   })
 
   it('同一題考過兩次，兩個梯次都算一題錯，但科目的錯題數只算一題', () => {
     const [l11] = wrongBookBySubject(examMap(), ['b'], new Set(['b']))
-    expect(l11.groups.map((g) => g.wrong.length)).toEqual([1, 1])
+    expect(l11.groups.map((g) => g.items.length)).toEqual([1, 1])
     expect(l11.wrongCount).toBe(1)
   })
 
@@ -68,7 +68,7 @@ describe('錯題本分組', () => {
     const [l11] = wrongBookBySubject(examMap(), ['own'], new Set(['own']))
     const last = l11.groups.at(-1)!
     expect(last.title).toBe('自編題')
-    expect(last.wrong.map((w) => w.question.id)).toEqual(['own'])
+    expect(last.items.map((w) => w.question.id)).toEqual(['own'])
     expect(last.size).toBeUndefined()
   })
 
@@ -79,6 +79,6 @@ describe('錯題本分組', () => {
 
   it('同一組裡依錯題本的順序（最近答錯的在前）', () => {
     const [l11] = wrongBookBySubject(examMap(), ['b', 'a'], new Set(['a', 'b']))
-    expect(l11.groups[1].wrong.map((w) => w.question.id)).toEqual(['b', 'a'])
+    expect(l11.groups[1].items.map((w) => w.question.id)).toEqual(['b', 'a'])
   })
 })

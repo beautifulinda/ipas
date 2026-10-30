@@ -3,7 +3,7 @@ import type { Concept } from '~/types/map'
 import type { Attempt } from '~/utils/progress'
 
 // 手機版：全螢幕作答
-defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
+defineProps<{ concept: Concept; attempts: readonly Attempt[]; startQuestion?: string }>()
 const emit = defineEmits<{ close: []; answered: [questionId: string, choice: string, correct: boolean] }>()
 
 const closeButton = ref<HTMLButtonElement>()
@@ -57,7 +57,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
         <button ref="closeButton" type="button" class="close" aria-label="結束練習" @click="emit('close')">✕</button>
       </header>
       <div class="quiz-body">
-        <PracticeSection :concept="concept" :attempts="attempts" @answered="onAnswered" />
+        <PracticeSection :concept="concept" :attempts="attempts" :start-question="startQuestion" @answered="onAnswered" />
       </div>
     </div>
   </Teleport>

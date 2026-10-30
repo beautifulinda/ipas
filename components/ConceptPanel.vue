@@ -3,7 +3,7 @@ import type { Concept } from '~/types/map'
 import type { Attempt } from '~/utils/progress'
 
 // 桌面版：右側面板，地圖保持可見
-defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
+defineProps<{ concept: Concept; attempts: readonly Attempt[]; startQuestion?: string }>()
 const emit = defineEmits<{
   close: []
   answered: [questionId: string, choice: string, correct: boolean]
@@ -30,6 +30,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       ref="practice"
       :concept="concept"
       :attempts="attempts"
+      :start-question="startQuestion"
       @answered="onAnswered"
       @engage="emit('engage')"
       @position="emit('position', $event)"

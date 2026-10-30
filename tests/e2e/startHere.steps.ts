@@ -42,7 +42,8 @@ Then(/^地圖前往「(.+)」$/, async ({ page }, title: string) => {
 
 // 手機開全螢幕作答，桌面捲到右側面板的練習題；兩種都要看得到題目本身
 Then(/^畫面直接顯示「(.+)」的第 (\d+) 題$/, async ({ page, isMobile }, title: string, n: string) => {
-  const stem = page.getByText(`測試題：${title} 第 ${n} 題`, { exact: true })
+  // 收起來的「學習紀錄」選單裡也有複習清單的題目文字，只看畫面上看得到的
+  const stem = page.getByText(`測試題：${title} 第 ${n} 題`, { exact: true }).filter({ visible: true })
   if (isMobile) await expect(page.getByRole('dialog', { name: `${title}・練習` })).toBeVisible()
   await expect(stem).toBeInViewport()
 })

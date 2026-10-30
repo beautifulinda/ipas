@@ -16,11 +16,19 @@ export interface Dismissal {
   dismissedAt: string // ISO 8601
 }
 
+// 使用者自己標記「不熟」或按「我懂了」拿掉標記的紀錄，每題以最後一筆為準（需求在 tests/features/標記不熟.feature）
+export interface Mark {
+  id?: number // IndexedDB 自動編號，匯出時不帶
+  questionId: string
+  marked: boolean
+  markedAt: string // ISO 8601
+}
+
 export const DISMISS_PROMPT = '這題答對了，要從錯題本移除嗎？'
 
 export const EXPORT_APP = 'ipas-topic-map'
-// 版本 2 加入錯題本的移除紀錄；仍可匯入版本 1 的檔案
-export const EXPORT_VERSION = 2
+// 版本 2 加入錯題本的移除紀錄、版本 3 加入不熟標記；仍可匯入版本 1、2 的檔案
+export const EXPORT_VERSION = 3
 
 export interface ExportFile {
   app: typeof EXPORT_APP
@@ -28,11 +36,13 @@ export interface ExportFile {
   exportedAt: string
   attempts: Omit<Attempt, 'id'>[]
   dismissals: Omit<Dismissal, 'id'>[]
+  marks: Omit<Mark, 'id'>[]
 }
 
 export interface ImportedRecords {
   attempts: Omit<Attempt, 'id'>[]
   dismissals: Omit<Dismissal, 'id'>[]
+  marks: Omit<Mark, 'id'>[]
 }
 
 // 每題最近一次的作答
@@ -68,6 +78,25 @@ export function wrongBook(attempts: readonly Attempt[], dismissals: readonly Dis
     .map(([questionId]) => questionId)
 }
 
+// 標記不熟的題目：每題最後一筆紀錄是「標記」的，最近標記的排前面；答對不會拿掉，只有「我懂了」會
+export function markedQuestions(marks: readonly Mark[]) {
+  const latest = new Map<string, Mark>()
+  for (const mark of marks) {
+    const current = latest.get(mark.questionId)
+    if (!current || mark.markedAt >= current.markedAt) latest.set(mark.questionId, mark)
+  }
+  return [...latest.values()]
+    .filter((mark) => mark.marked)
+    .sort((a, b) => b.markedAt.localeCompare(a.markedAt))
+    .map((mark) => mark.questionId)
+}
+
+// 複習清單：錯題（最近答錯的在前）接著只有標記不熟的題目（最近標記的在前），同一題只出現一次
+export function reviewList(wrongIds: readonly string[], markedIds: readonly string[]) {
+  const wrong = new Set(wrongIds)
+  return [...wrongIds, ...markedIds.filter((id) => !wrong.has(id))]
+}
+
 // 答對一題錯題本裡的題目時，要詢問使用者是否移除（在記下這次作答之前判斷）
 export function shouldAskDismiss(
   questionId: string,
@@ -100,7 +129,12 @@ export function removedNotice(count: number) {
   return `有 ${count} 題已下架，作答紀錄仍保留在你的瀏覽器`
 }
 
-export function toExport(attempts: Attempt[], dismissals: Dismissal[] = [], now = new Date()): ExportFile {
+export function toExport(
+  attempts: Attempt[],
+  dismissals: Dismissal[] = [],
+  marks: Mark[] = [],
+  now = new Date(),
+): ExportFile {
   return {
     app: EXPORT_APP,
     version: EXPORT_VERSION,
@@ -113,6 +147,7 @@ export function toExport(attempts: Attempt[], dismissals: Dismissal[] = [], now 
       answeredAt,
     })),
     dismissals: dismissals.map(({ questionId, dismissedAt }) => ({ questionId, dismissedAt })),
+    marks: marks.map(({ questionId, marked, markedAt }) => ({ questionId, marked, markedAt })),
   }
 }
 
@@ -136,6 +171,12 @@ function isDismissal(value: unknown): value is Omit<Dismissal, 'id'> {
   return typeof d.questionId === 'string' && isDate(d.dismissedAt)
 }
 
+function isMark(value: unknown): value is Omit<Mark, 'id'> {
+  if (typeof value !== 'object' || value === null) return false
+  const m = value as Record<string, unknown>
+  return typeof m.questionId === 'string' && typeof m.marked === 'boolean' && isDate(m.markedAt)
+}
+
 // 讀取匯出檔；格式不符時丟出可直接顯示給使用者的錯誤訊息
 export function parseExport(text: string): ImportedRecords {
   let data: unknown
@@ -144,18 +185,28 @@ export function parseExport(text: string): ImportedRecords {
   } catch {
     throw new Error('檔案不是有效的 JSON。')
   }
-  const file = data as { app?: unknown; version?: unknown; attempts?: unknown; dismissals?: unknown } | null
+  const file = data as {
+    app?: unknown
+    version?: unknown
+    attempts?: unknown
+    dismissals?: unknown
+    marks?: unknown
+  } | null
   if (!file || file.app !== EXPORT_APP) throw new Error('這不是本網站匯出的學習紀錄檔。')
-  if (file.version !== 1 && file.version !== EXPORT_VERSION) {
+  if (file.version !== 1 && file.version !== 2 && file.version !== EXPORT_VERSION) {
     throw new Error(`不支援的紀錄檔版本：${String(file.version)}。`)
   }
   // 版本 1 沒有錯題本的移除紀錄
   const dismissals = file.version === 1 ? [] : file.dismissals
+  // 版本 1、2 沒有不熟標記
+  const marks = file.version === EXPORT_VERSION ? file.marks : []
   if (
     !Array.isArray(file.attempts) ||
     !file.attempts.every(isAttempt) ||
     !Array.isArray(dismissals) ||
-    !dismissals.every(isDismissal)
+    !dismissals.every(isDismissal) ||
+    !Array.isArray(marks) ||
+    !marks.every(isMark)
   ) {
     throw new Error('紀錄檔內容格式不正確。')
   }
@@ -168,6 +219,7 @@ export function parseExport(text: string): ImportedRecords {
       answeredAt,
     })),
     dismissals: dismissals.map(({ questionId, dismissedAt }) => ({ questionId, dismissedAt })),
+    marks: marks.map(({ questionId, marked, markedAt }) => ({ questionId, marked, markedAt })),
   }
 }
 
@@ -190,6 +242,10 @@ export function newAttempts(existing: Omit<Attempt, 'id'>[], incoming: Omit<Atte
 
 export function newDismissals(existing: Omit<Dismissal, 'id'>[], incoming: Omit<Dismissal, 'id'>[]) {
   return onlyNew(existing, incoming, (d) => `${d.questionId}@${d.dismissedAt}`)
+}
+
+export function newMarks(existing: Omit<Mark, 'id'>[], incoming: Omit<Mark, 'id'>[]) {
+  return onlyNew(existing, incoming, (m) => `${m.questionId}@${m.markedAt}@${m.marked}`)
 }
 
 // 打開主題時停在哪一題（從 0 起算）：第一題還沒作答的；全部作答過就停在第一題最近答錯的；全部答對回到第 1 題。

@@ -75,7 +75,8 @@
    - 題號分組（作者 2026-10-30 決定，需求在 `tests/features/題號分組.feature`，分組在 `utils/questionGroups.ts`）：一整排題號看起來壓力大，超過 10 題時每 10 題一組、一次只顯示一組，分組按鈕寫「答對 8／10」；打開主題顯示〈繼續作答〉那題所在的組；點分組只換題號不換題，換題到別組時題號跟著換組；10 題以下不分組。
    - 進度圓餅與題數（作者 2026-10-30 決定，需求在 `練習回饋.feature`）：圓餅分答對（綠）、答錯（紅色斜線，紅綠色弱也分得出來）、還沒作答（灰）；題數「✓ 1・✗ 1・未答 2」只顯示在地圖上選到的城鎮旁（每棟都顯示紅字會增加壓力、標籤也會互相擋住），文字在 `utils/progression.ts` 的 `progressText`。
    - 下一站（作者 2026-10-30 決定，需求在 `tests/features/下一站.feature`，點擊的 E2E 場景在 `從這裡開始.feature`）：目前的主題全部作答過（答錯也算）時，依官方順序往後找第一個還有題目沒作答的主題（做一半的也算），到最後再從頭找；目前這棟建築上方顯示綠色「🎉 全部作答完了！下一站：主題 →」，取代「作答中」與「從這裡開始」，點了和「從這裡開始」一樣直接前往並顯示題目；地圖導覽也有對應按鈕給報讀軟體。挑選規則在 `utils/progression.ts` 的 `nextStop`。
-   - 移除紀錄存在 IndexedDB 的 `dismissals`（資料庫版本 2，從版本 1 升級會保留舊作答紀錄）；匯出檔版本 2 含 `dismissals`，仍可匯入版本 1。
+   - 標記不熟（作者 2026-10-30 審過，需求在 `tests/features/標記不熟.feature`）：做題時覺得觀念不熟可以按「🔖 標記不熟」（作答前後都可以，按鈕在題目上方，才不會擋到送出後 Tab 到「下一題」）；答對不會拿掉，只有按「我懂了」才拿掉，「我懂了」只拿掉標記、不動錯題本。錯題本改名「複習清單」，錯題與不熟的題目列在一起，每題標「答錯」「不熟」，可篩選「全部／答錯 N／不熟 N」；頁首「學習紀錄（複習 N）」與科目分頁「L11・複習 N」算兩種合計、同一題只算一次；考古題梯次的「錯 N／50」只算錯題。點清單裡的題目直接打開那一題（`pages/index.vue` 的 `onReview`，`PracticeSection` 的 `startQuestion`）。標記不影響城鎮等級。
+   - 移除紀錄存在 IndexedDB 的 `dismissals`、不熟標記存在 `marks`（每筆是標記或拿掉，每題以最後一筆為準；資料庫版本 3，舊版升級會保留舊紀錄）；匯出檔版本 3 含 `dismissals` 與 `marks`，仍可匯入版本 1、2。
 5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`）、Playwright E2E，全部通過才部署；PR 只跑檢查不部署。
    - 需求測試（作者 2026-10-21 決定）：功能需求用正體中文 Gherkin（`# language: zh-TW`，假設／當／那麼／而且／但是）寫在 `tests/features/*.feature`，每個功能都要有 Happy Path 與 Sad Path，用詞要讓作者不看程式碼就能審。由 quickpickle 在 Vitest 執行，步驟定義在 `tests/features/*.steps.ts`（要加進 `vitest.config.ts` 的 `setupFiles`）。新的需求檔先給作者審過再實作步驟。
    - E2E（2026-10-22）：`playwright-bdd` 讀同樣的 `.feature`，只跑標 `@e2e` 的場景，步驟在 `tests/e2e/*.steps.ts`（Vitest 不讀）。不選 `@quickpickle/playwright`：作者標示不穩定，且無法開觸控模擬（`pointer: coarse`）。

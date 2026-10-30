@@ -3,9 +3,12 @@ import {
   EXPORT_APP,
   EXPORT_VERSION,
   latestByQuestion,
+  markedQuestions,
   newAttempts,
   newDismissals,
+  newMarks,
   parseExport,
+  reviewList,
   shouldAskDismiss,
   summary,
   toExport,
@@ -60,17 +63,33 @@ describe('summary', () => {
 
 describe('匯出與匯入', () => {
   const dismissal = { questionId: 'q1', dismissedAt: '2026-10-21T05:00:00.000Z' }
+  const mark = { questionId: 'q2', marked: true, markedAt: '2026-10-21T06:00:00.000Z' }
 
-  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同（含錯題本的移除紀錄）', () => {
-    const file = toExport([{ ...attempt('q1', true), id: 7 }], [{ ...dismissal, id: 3 }], new Date('2026-10-21'))
+  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同（含錯題本的移除紀錄與不熟標記）', () => {
+    const file = toExport(
+      [{ ...attempt('q1', true), id: 7 }],
+      [{ ...dismissal, id: 3 }],
+      [{ ...mark, id: 5 }],
+      new Date('2026-10-21'),
+    )
     expect(file.attempts[0]).not.toHaveProperty('id')
     expect(file.dismissals[0]).not.toHaveProperty('id')
-    expect(parseExport(JSON.stringify(file))).toEqual({ attempts: file.attempts, dismissals: file.dismissals })
+    expect(file.marks[0]).not.toHaveProperty('id')
+    expect(parseExport(JSON.stringify(file))).toEqual({
+      attempts: file.attempts,
+      dismissals: file.dismissals,
+      marks: file.marks,
+    })
   })
 
-  it('仍可匯入版本 1 的檔案（沒有移除紀錄）', () => {
+  it('仍可匯入版本 1 的檔案（沒有移除紀錄與標記）', () => {
     const v1 = { app: EXPORT_APP, version: 1, exportedAt: '2026-10-20', attempts: [attempt('q1', false)] }
-    expect(parseExport(JSON.stringify(v1)).dismissals).toEqual([])
+    expect(parseExport(JSON.stringify(v1))).toMatchObject({ dismissals: [], marks: [] })
+  })
+
+  it('仍可匯入版本 2 的檔案（沒有標記）', () => {
+    const v2 = { app: EXPORT_APP, version: 2, exportedAt: '2026-10-26', attempts: [], dismissals: [dismissal] }
+    expect(parseExport(JSON.stringify(v2))).toMatchObject({ dismissals: [dismissal], marks: [] })
   })
 
   it.each([
@@ -79,7 +98,13 @@ describe('匯出與匯入', () => {
     ['版本不符', JSON.stringify({ app: EXPORT_APP, version: 99, attempts: [] }), '不支援的紀錄檔版本：99。'],
     [
       '紀錄缺欄位',
-      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [{ questionId: 'q1' }], dismissals: [] }),
+      JSON.stringify({
+        app: EXPORT_APP,
+        version: EXPORT_VERSION,
+        attempts: [{ questionId: 'q1' }],
+        dismissals: [],
+        marks: [],
+      }),
       '紀錄檔內容格式不正確。',
     ],
     [
@@ -89,12 +114,18 @@ describe('匯出與匯入', () => {
         version: EXPORT_VERSION,
         attempts: [{ ...attempt('q1', true), answeredAt: '昨天' }],
         dismissals: [],
+        marks: [],
       }),
       '紀錄檔內容格式不正確。',
     ],
     [
       '版本 2 缺少移除紀錄',
-      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [] }),
+      JSON.stringify({ app: EXPORT_APP, version: 2, attempts: [] }),
+      '紀錄檔內容格式不正確。',
+    ],
+    [
+      '版本 3 缺少標記',
+      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [], dismissals: [] }),
       '紀錄檔內容格式不正確。',
     ],
   ])('%s時顯示可讀的錯誤訊息', (_, text, message) => {
@@ -116,5 +147,25 @@ describe('匯出與匯入', () => {
     expect(newDismissals([dismissal], [dismissal, { ...dismissal, questionId: 'q2' }])).toEqual([
       { ...dismissal, questionId: 'q2' },
     ])
+    // 同一題同一時間，標記和拿掉是不同的紀錄
+    expect(newMarks([mark], [mark, { ...mark, marked: false }])).toEqual([{ ...mark, marked: false }])
+  })
+})
+
+describe('不熟標記', () => {
+  const at = (minute: number) => `2026-10-30T01:${String(minute).padStart(2, '0')}:00.000Z`
+
+  it('每題以最後一筆為準，最近標記的排前面', () => {
+    const marks = [
+      { questionId: 'a', marked: true, markedAt: at(1) },
+      { questionId: 'b', marked: true, markedAt: at(2) },
+      { questionId: 'a', marked: false, markedAt: at(3) }, // 我懂了
+      { questionId: 'c', marked: true, markedAt: at(4) },
+    ]
+    expect(markedQuestions(marks)).toEqual(['c', 'b'])
+  })
+
+  it('複習清單先列錯題，再列只有標記的題目，同一題只出現一次', () => {
+    expect(reviewList(['w1', 'both'], ['m1', 'both'])).toEqual(['w1', 'both', 'm1'])
   })
 })
