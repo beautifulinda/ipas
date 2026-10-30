@@ -5,27 +5,29 @@ import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { buildWorld, seededRandom, type BBox } from '~/utils/islandLayout'
 import type { MapNode } from '~/utils/mapTree'
-import { progressText, type CelebrationPlan, type Progression } from '~/utils/progression'
+import { nextStopText, progressText, type CelebrationPlan, type Progression } from '~/utils/progression'
 import { makeFireworks, makeLightPillar, makeMarker, makeStarBurst, type Effect } from '~/utils/scene/models'
 import { SEA_COLOR, SKY_COLOR } from '~/utils/scene/palette'
 import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
 
 // insetBottom：畫面底部被其他元素（手機的 bottom sheet）擋住的高度，聚焦時改對準上方可見範圍
 // startId：建議從這裡開始的城鎮，標籤上方顯示「從這裡開始」
+// nextId：目前的主題全部作答過時，建議的下一站；目前這棟建築上方顯示「下一站」，取代「作答中」與「從這裡開始」
 // answering：正在作答目前這個主題（鍵盤在右邊的題目上），questionNumber 是第幾題；地圖放大到建築物並顯示提示
 const props = withDefaults(
   defineProps<{
     tree: MapNode
     progression: Progression
     startId?: string
+    nextId?: string
     insetBottom?: number
     answering?: boolean
     questionNumber?: number
   }>(),
-  { startId: undefined, insetBottom: 0, answering: false, questionNumber: 1 },
+  { startId: undefined, nextId: undefined, insetBottom: 0, answering: false, questionNumber: 1 },
 )
 const focusId = defineModel<string>('focusId', { required: true })
-// start：點了「從這裡開始」，要直接開始練習那個主題
+// start：點了「從這裡開始」或「下一站」，要直接開始練習那個主題
 // leave：作答中用滑鼠點了地圖，回到地圖模式
 // 按鍵規則不在這裡，集中在 composables/useMapKeyboard.ts，透過 defineExpose 的操作控制地圖
 const emit = defineEmits<{ unsupported: []; start: [conceptId: string]; leave: [] }>()
@@ -51,7 +53,7 @@ const layout = computed(() => buildWorld(props.tree, portrait.value))
 
 // 文字標籤：「從這裡開始」最優先、不受鏡頭所在的島限制；島名、地區名一律列出，城鎮名只列目前這座島的；
 // 實際顯示與否由每格畫面的避讓排版決定
-type LabelKind = 'start' | 'answering' | 'island' | 'region' | 'town'
+type LabelKind = 'start' | 'next' | 'answering' | 'island' | 'region' | 'town'
 interface Label {
   key: string
   anchor: string
@@ -62,8 +64,12 @@ interface Label {
 }
 // 作答中只顯示「作答中」的提示，不顯示「從這裡開始」
 const answeringHere = computed(() => props.answering && focusNode.value.depth === 3)
+const nextHere = computed(() => Boolean(props.nextId) && focusNode.value.depth === 3)
+const nextTitle = computed(() => layout.value.towns.find((t) => t.id === props.nextId)?.data.title ?? '')
 const labels = computed<Label[]>(() => [
-  ...(answeringHere.value
+  ...(nextHere.value
+    ? [{ key: `next:${props.nextId}`, anchor: focusId.value, kind: 'next' as const, text: nextStopText(nextTitle.value) }]
+    : answeringHere.value
     ? [{ key: `answering:${focusId.value}`, anchor: focusId.value, kind: 'answering' as const, text: `作答中：第 ${props.questionNumber} 題・請看右邊的題目` }]
     : props.startId
       ? [{ key: `start:${props.startId}`, anchor: props.startId, kind: 'start' as const, text: '從這裡開始' }]
@@ -272,7 +278,7 @@ function placeLabels() {
   for (const el of elements) {
     const key = el.dataset.anchor!
     const kind = el.dataset.kind as LabelKind
-    const above = kind === 'start' || kind === 'answering'
+    const above = kind === 'start' || kind === 'next' || kind === 'answering'
     const anchor = above ? world.townPosition(key) : world.anchors.get(key)
     const bw = el.offsetWidth
     const bh = el.offsetHeight
@@ -281,7 +287,7 @@ function placeLabels() {
       const s = toScreen(anchor)
       let candidates: [number, number][] = []
       // 「從這裡開始」放在城鎮正上方；島名的錨點在島的最後緣，標籤整個放在錨點上方
-      if (above) candidates = [[s.x, s.y - (kind === 'answering' ? 64 : 44) - bh / 2]]
+      if (above) candidates = [[s.x, s.y - (kind === 'start' ? 44 : 64) - bh / 2]]
       else if (kind === 'island') candidates = [[s.x, s.y - bh / 2 - 6]]
       else if (kind === 'region') {
         // 地區在畫面上太小時不顯示名稱；換位置時不能離開地區範圍，免得看不出是哪個地區
@@ -558,7 +564,7 @@ watch(
         :data-key="label.key"
         :data-anchor="label.anchor"
         :data-kind="label.kind"
-        @click="label.kind === 'start' && emit('start', label.anchor)"
+        @click="label.kind === 'start' ? emit('start', label.anchor) : label.kind === 'next' && emit('start', nextId!)"
       >
         <span
           v-if="label.progress"
@@ -576,6 +582,7 @@ watch(
     </div>
     <!-- 鍵盤與螢幕閱讀器的導覽：目前這一層可以前往的位置 -->
     <nav class="sr-nav" aria-label="地圖導覽">
+      <button v-if="nextHere" type="button" @click="emit('start', nextId!)">全部作答完了，下一站：{{ nextTitle }}</button>
       <button v-if="startId" type="button" @click="emit('start', startId)">從這裡開始：{{ startTitle }}</button>
       <button v-if="focusNode.parent" type="button" @click="goUp">回上一層</button>
       <button v-for="node in navTargets" :key="node.id" type="button" @click="focusId = node.id">
@@ -693,6 +700,33 @@ watch(
   animation: bob 1.6s ease-in-out infinite;
 }
 
+/* 下一站：和「從這裡開始」一樣可以點，綠色表示這個主題告一段落 */
+.tag--next {
+  z-index: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 0.3rem 0.8rem;
+  border-color: #1d5a2a;
+  /* 白字要有 4.5:1 的對比 */
+  background: #2a7a38;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  white-space: pre-line;
+  animation: bob 1.6s ease-in-out infinite;
+}
+
+.tag--next::after {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  border: 7px solid transparent;
+  border-top-color: #1d5a2a;
+  border-bottom: 0;
+  content: '';
+  transform: translateX(-50%);
+}
+
 .tag--answering {
   z-index: 1;
   padding: 0.25rem 0.8rem;
@@ -732,7 +766,8 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tag--start {
+  .tag--start,
+  .tag--next {
     animation: none;
   }
 }

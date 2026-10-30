@@ -16,6 +16,7 @@ import {
   expansionText,
   milestoneText,
   newMilestones,
+  nextStop,
   recommendedStart,
   townSnapshot,
   type CelebrationPlan,
@@ -69,6 +70,10 @@ const quizShown = computed(() => Boolean(concept.value && isMobile.value && quiz
 const progression = computed(() => computeProgression(map, attempts.value))
 // 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
 const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
+// 目前的主題全部作答過時，建議的下一站（需求在 tests/features/下一站.feature）
+const nextId = computed(() =>
+  ready.value && concept.value ? nextStop(map, progression.value, concept.value.id) : undefined,
+)
 // 地圖對外提供的操作（IslandMap3D 的 defineExpose）
 const mapRef = ref<MapControls & { celebrate: (plan: CelebrationPlan) => void; focus: () => void }>()
 const panelRef = ref<{ focusQuestion: () => Promise<void> }>()
@@ -230,6 +235,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           :tree="tree"
           :progression="progression"
           :start-id="startId"
+          :next-id="nextId"
           :answering="answering && !isMobile"
           :question-number="questionNumber"
           @start="onStart"

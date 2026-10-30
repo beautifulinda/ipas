@@ -21,6 +21,7 @@ export default defineConfig({
       'tests/features/celebration.steps.ts',
       'tests/features/resume.steps.ts',
       'tests/features/questionGroups.steps.ts',
+      'tests/features/nextStop.steps.ts',
     ],
   },
 })

@@ -120,6 +120,23 @@ const MILESTONE_TEXT: Record<Milestone['kind'], (title: string) => string> = {
   lighthouse: (title) => `🗼 ${title} 的燈塔亮起來了！`,
 }
 
+// 下一站（需求在 tests/features/下一站.feature）：目前的主題全部作答過（答錯也算）時，
+// 依官方順序往後找第一個還有題目沒作答的主題，到最後再從頭找；目前的主題還沒做完或全部都做完時不建議
+export function nextStop(map: TopicMap, progression: Progression, currentId: string) {
+  const unfinished = (id: string) => {
+    const progress = progression.townProgress.get(id)
+    return Boolean(progress && progress.correct + progress.wrong < progress.total)
+  }
+  if (!progression.townProgress.has(currentId) || unfinished(currentId)) return undefined
+  const ids = map.subjects.flatMap((s) => s.categories.flatMap((c) => c.concepts.map((concept) => concept.id)))
+  const at = ids.indexOf(currentId)
+  return [...ids.slice(at + 1), ...ids.slice(0, at)].find(unfinished)
+}
+
+export function nextStopText(title: string) {
+  return `🎉 全部作答完了！\n下一站：${title} →`
+}
+
 export function milestoneText(milestone: Milestone) {
   return MILESTONE_TEXT[milestone.kind](milestone.title)
 }

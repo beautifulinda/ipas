@@ -31,7 +31,7 @@ Then(/^「(.+)」不顯示進度圓餅$/, (world: World, title) => {
 
 // 從這裡開始
 
-Given('地圖上依官方順序有三個主題：', (world: World, table: DataTable) => {
+Given(/^地圖上依官方順序有.個主題：$/, (world: World, table: DataTable) => {
   const rows = table.hashes() as { 主題: string; 題數: string }[]
   setup(world, '主題區', rows[0].主題, 0)
   const concepts = world.map.subjects[0].categories[0].concepts
