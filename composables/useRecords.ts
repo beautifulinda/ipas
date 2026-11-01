@@ -3,6 +3,7 @@ import {
   markedQuestions,
   newAttempts,
   newDismissals,
+  newExamResults,
   newMarks,
   parseExport,
   toExport,
@@ -11,22 +12,25 @@ import {
   type Dismissal,
   type Mark,
 } from '~/utils/progress'
+import type { ExamResult } from '~/utils/mockExam'
 
-// 作答紀錄、錯題本的移除紀錄、不熟標記只存在使用者瀏覽器的 IndexedDB，不上傳
+// 作答紀錄、錯題本的移除紀錄、不熟標記、模擬考成績只存在使用者瀏覽器的 IndexedDB，不上傳
 const DB_NAME = 'ipas'
 const ATTEMPTS = 'attempts'
 const DISMISSALS = 'dismissals'
 const MARKS = 'marks'
+const EXAMS = 'exams'
 
 const attempts = ref<Attempt[]>([])
 const dismissals = ref<Dismissal[]>([])
 const marks = ref<Mark[]>([])
+const exams = ref<ExamResult[]>([])
 const ready = ref(false)
 const storageError = ref('')
 let dbPromise: Promise<IDBPDatabase> | undefined
 
 function db() {
-  dbPromise ??= openDB(DB_NAME, 3, {
+  dbPromise ??= openDB(DB_NAME, 4, {
     upgrade(database, oldVersion) {
       if (oldVersion < 1) {
         const store = database.createObjectStore(ATTEMPTS, { keyPath: 'id', autoIncrement: true })
@@ -36,6 +40,8 @@ function db() {
       if (oldVersion < 2) database.createObjectStore(DISMISSALS, { keyPath: 'id', autoIncrement: true })
       // 版本 3：使用者自己標記不熟的題目（需求在 tests/features/標記不熟.feature）
       if (oldVersion < 3) database.createObjectStore(MARKS, { keyPath: 'id', autoIncrement: true })
+      // 版本 4：模擬考成績（需求在 tests/features/模擬考.feature）
+      if (oldVersion < 4) database.createObjectStore(EXAMS, { keyPath: 'id', autoIncrement: true })
     },
   })
   return dbPromise
@@ -47,6 +53,7 @@ async function load() {
     attempts.value = await database.getAll(ATTEMPTS)
     dismissals.value = await database.getAll(DISMISSALS)
     marks.value = await database.getAll(MARKS)
+    exams.value = await database.getAll(EXAMS)
   } catch {
     // 無痕模式或瀏覽器停用儲存時，紀錄只留在這次開啟的頁面
     storageError.value = '瀏覽器無法儲存紀錄，關閉頁面後作答紀錄會消失。'
@@ -86,8 +93,25 @@ async function mark(questionId: string, marked: boolean) {
   }
 }
 
+// 模擬考交卷：有作答的題目記成作答紀錄、成績另外存；一次寫入，地圖只重算一次
+async function recordExam(result: Omit<ExamResult, 'id'>, examAttempts: Omit<Attempt, 'id'>[]) {
+  try {
+    const tx = (await db()).transaction([ATTEMPTS, EXAMS], 'readwrite')
+    const [examId, ...attemptIds] = (await Promise.all([
+      tx.objectStore(EXAMS).add(result),
+      ...examAttempts.map((attempt) => tx.objectStore(ATTEMPTS).add(attempt)),
+    ])) as number[]
+    await tx.done
+    exams.value = [...exams.value, { ...result, id: examId }]
+    attempts.value = [...attempts.value, ...examAttempts.map((attempt, i) => ({ ...attempt, id: attemptIds[i] }))]
+  } catch {
+    exams.value = [...exams.value, result]
+    attempts.value = [...attempts.value, ...examAttempts]
+  }
+}
+
 function exportFile() {
-  const data = toExport(attempts.value, dismissals.value, marks.value)
+  const data = toExport(attempts.value, dismissals.value, marks.value, new Date(), exams.value)
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -103,25 +127,30 @@ async function importFile(file: File) {
   const freshAttempts = newAttempts(attempts.value, incoming.attempts)
   const freshDismissals = newDismissals(dismissals.value, incoming.dismissals)
   const freshMarks = newMarks(marks.value, incoming.marks)
-  if (!freshAttempts.length && !freshDismissals.length && !freshMarks.length) return 0
+  const freshExams = newExamResults(exams.value, incoming.exams)
+  const fresh = freshAttempts.length + freshDismissals.length + freshMarks.length + freshExams.length
+  if (!fresh) return 0
   try {
-    const tx = (await db()).transaction([ATTEMPTS, DISMISSALS, MARKS], 'readwrite')
+    const tx = (await db()).transaction([ATTEMPTS, DISMISSALS, MARKS, EXAMS], 'readwrite')
     await Promise.all([
       ...freshAttempts.map((attempt) => tx.objectStore(ATTEMPTS).add(attempt)),
       ...freshDismissals.map((dismissal) => tx.objectStore(DISMISSALS).add(dismissal)),
       ...freshMarks.map((entry) => tx.objectStore(MARKS).add(entry)),
+      ...freshExams.map((entry) => tx.objectStore(EXAMS).add(entry)),
       tx.done,
     ])
     const database = await db()
     attempts.value = await database.getAll(ATTEMPTS)
     dismissals.value = await database.getAll(DISMISSALS)
     marks.value = await database.getAll(MARKS)
+    exams.value = await database.getAll(EXAMS)
   } catch {
     attempts.value = [...attempts.value, ...freshAttempts]
     dismissals.value = [...dismissals.value, ...freshDismissals]
     marks.value = [...marks.value, ...freshMarks]
+    exams.value = [...exams.value, ...freshExams]
   }
-  return freshAttempts.length + freshDismissals.length + freshMarks.length
+  return fresh
 }
 
 const wrongQuestionIds = computed(() => wrongBook(attempts.value, dismissals.value))
@@ -138,6 +167,7 @@ export function useRecords() {
   return {
     attempts: readonly(attempts),
     dismissals: readonly(dismissals),
+    exams: readonly(exams),
     wrongQuestionIds,
     markedQuestionIds,
     ready: readonly(ready),
@@ -145,6 +175,7 @@ export function useRecords() {
     record,
     dismiss,
     mark,
+    recordExam,
     exportFile,
     importFile,
   }

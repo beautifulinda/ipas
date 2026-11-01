@@ -3,6 +3,7 @@ import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
 import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
 import { reviewList } from '~/utils/progress'
+import { EXAM_SECONDS, clockText, examGroups, examPapers, paperStatusText, predictionText } from '~/utils/mockExam'
 import {
   filterItems,
   filterLabels,
@@ -17,9 +18,10 @@ import {
 
 const props = defineProps<{ map: TopicMap }>()
 // navigate：點複習清單的題目，前往主題並直接打開那一題
-const emit = defineEmits<{ navigate: [conceptId: string, questionId: string] }>()
+// exam：開始模擬考（考卷代號、要不要計時）
+const emit = defineEmits<{ navigate: [conceptId: string, questionId: string]; exam: [key: string, timed: boolean] }>()
 
-const { attempts, wrongQuestionIds, markedQuestionIds, storageError, exportFile, importFile } = useRecords()
+const { attempts, exams, wrongQuestionIds, markedQuestionIds, storageError, exportFile, importFile } = useRecords()
 const { soundOn, setSoundOn } = useSound()
 const index = computed(() => questionIndex(props.map))
 const knownIds = computed(() => new Set(index.value.keys()))
@@ -46,6 +48,16 @@ const currentSubject = computed(
 )
 const filter = ref<ReviewFilter>('all')
 const filters: ReviewFilter[] = ['all', 'wrong', 'marked']
+
+// 模擬考（需求在 tests/features/模擬考.feature）：依考科分組，顯示每份最近一次的分數與兩科的預估
+const examList = computed(() => examGroups(examPapers(props.map)))
+const prediction = computed(() => predictionText(exams.value))
+const timed = ref(true)
+
+function startExam(key: string) {
+  if (menu.value) menu.value.open = false
+  emit('exam', key, timed.value)
+}
 
 const message = ref('')
 const fileInput = ref<HTMLInputElement>()
@@ -84,6 +96,27 @@ async function onImport(event: Event) {
         {{ stats.total ? `${Math.round(stats.rate * 100)}%` : '—' }}
       </p>
       <p v-if="removed" class="hint">{{ removedNotice(removed) }}</p>
+
+      <template v-if="examList.length">
+        <h3>模擬考</h3>
+        <p class="hint">照官方題號寫完一整科 50 題，交卷才看分數。</p>
+        <p v-if="prediction" class="prediction">{{ prediction }}</p>
+        <div class="filters" role="group" aria-label="計時">
+          <button type="button" :aria-pressed="timed" @click="timed = true">計時 {{ clockText(EXAM_SECONDS) }}</button>
+          <button type="button" :aria-pressed="!timed" @click="timed = false">不計時</button>
+        </div>
+        <div v-for="group in examList" :key="group.paper" class="exam-group">
+          <h4>{{ group.title }}</h4>
+          <ul class="exam-list">
+            <li v-for="paper in group.papers" :key="paper.key">
+              <button type="button" @click="startExam(paper.key)">
+                <span class="paper-title">{{ paper.title }}</span>
+                <span class="paper-score">{{ paperStatusText(exams, paper.session, paper.paper) }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </template>
 
       <h3>複習清單</h3>
       <div class="subject-tabs" role="group" aria-label="科目">
@@ -286,6 +319,47 @@ p {
   border-color: #2b2633;
   background: #f3ecdc;
   font-weight: 700;
+}
+
+.prediction {
+  margin: 0.4rem 0;
+  font-weight: 700;
+}
+
+h4 {
+  margin: 0.5rem 0 0.2rem;
+  font-size: 0.85rem;
+  color: #556274;
+}
+
+.exam-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exam-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-bottom: 1px solid #ece4d2;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exam-list button:hover,
+.exam-list button:focus-visible {
+  background: #f3ecdc;
+}
+
+.exam-list .paper-score {
+  padding-left: 0;
 }
 
 .paper {

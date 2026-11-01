@@ -64,21 +64,35 @@ describe('summary', () => {
 describe('匯出與匯入', () => {
   const dismissal = { questionId: 'q1', dismissedAt: '2026-10-21T05:00:00.000Z' }
   const mark = { questionId: 'q2', marked: true, markedAt: '2026-10-21T06:00:00.000Z' }
+  const exam = {
+    session: '115-S3',
+    paper: 2 as const,
+    score: 78,
+    correct: 39,
+    total: 50,
+    durationSeconds: 3150,
+    timed: true,
+    timedOut: false,
+    submittedAt: '2026-10-21T07:00:00.000Z',
+  }
 
-  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同（含錯題本的移除紀錄與不熟標記）', () => {
+  it('匯出時拿掉 IndexedDB 編號，匯入後內容相同（含錯題本的移除紀錄、不熟標記與模擬考成績）', () => {
     const file = toExport(
       [{ ...attempt('q1', true), id: 7 }],
       [{ ...dismissal, id: 3 }],
       [{ ...mark, id: 5 }],
       new Date('2026-10-21'),
+      [{ ...exam, id: 2 }],
     )
     expect(file.attempts[0]).not.toHaveProperty('id')
     expect(file.dismissals[0]).not.toHaveProperty('id')
     expect(file.marks[0]).not.toHaveProperty('id')
+    expect(file.exams[0]).not.toHaveProperty('id')
     expect(parseExport(JSON.stringify(file))).toEqual({
       attempts: file.attempts,
       dismissals: file.dismissals,
       marks: file.marks,
+      exams: file.exams,
     })
   })
 
@@ -90,6 +104,11 @@ describe('匯出與匯入', () => {
   it('仍可匯入版本 2 的檔案（沒有標記）', () => {
     const v2 = { app: EXPORT_APP, version: 2, exportedAt: '2026-10-26', attempts: [], dismissals: [dismissal] }
     expect(parseExport(JSON.stringify(v2))).toMatchObject({ dismissals: [dismissal], marks: [] })
+  })
+
+  it('仍可匯入版本 3 的檔案（沒有模擬考成績）', () => {
+    const v3 = { app: EXPORT_APP, version: 3, exportedAt: '2026-10-30', attempts: [], dismissals: [], marks: [mark] }
+    expect(parseExport(JSON.stringify(v3))).toMatchObject({ marks: [mark], exams: [] })
   })
 
   it.each([
@@ -104,6 +123,7 @@ describe('匯出與匯入', () => {
         attempts: [{ questionId: 'q1' }],
         dismissals: [],
         marks: [],
+        exams: [],
       }),
       '紀錄檔內容格式不正確。',
     ],
@@ -115,6 +135,7 @@ describe('匯出與匯入', () => {
         attempts: [{ ...attempt('q1', true), answeredAt: '昨天' }],
         dismissals: [],
         marks: [],
+        exams: [],
       }),
       '紀錄檔內容格式不正確。',
     ],
@@ -125,7 +146,12 @@ describe('匯出與匯入', () => {
     ],
     [
       '版本 3 缺少標記',
-      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [], dismissals: [] }),
+      JSON.stringify({ app: EXPORT_APP, version: 3, attempts: [], dismissals: [] }),
+      '紀錄檔內容格式不正確。',
+    ],
+    [
+      '版本 4 缺少模擬考成績',
+      JSON.stringify({ app: EXPORT_APP, version: EXPORT_VERSION, attempts: [], dismissals: [], marks: [] }),
       '紀錄檔內容格式不正確。',
     ],
   ])('%s時顯示可讀的錯誤訊息', (_, text, message) => {

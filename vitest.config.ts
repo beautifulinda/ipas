@@ -23,6 +23,7 @@ export default defineConfig({
       'tests/features/questionGroups.steps.ts',
       'tests/features/nextStop.steps.ts',
       'tests/features/marks.steps.ts',
+      'tests/features/mockExam.steps.ts',
     ],
   },
 })
