@@ -81,8 +81,8 @@ describe('匯出與匯入', () => {
       [{ ...attempt('q1', true), id: 7 }],
       [{ ...dismissal, id: 3 }],
       [{ ...mark, id: 5 }],
-      new Date('2026-10-21'),
       [{ ...exam, id: 2 }],
+      new Date('2026-10-21'),
     )
     expect(file.attempts[0]).not.toHaveProperty('id')
     expect(file.dismissals[0]).not.toHaveProperty('id')

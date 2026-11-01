@@ -3,7 +3,7 @@ import type { TopicMap } from '~/types/map'
 import { questionIndex } from '~/utils/concepts'
 import { knownAttempts, removedNotice, removedQuestionIds, summary } from '~/utils/progress'
 import { reviewList } from '~/utils/progress'
-import { EXAM_SECONDS, clockText, examGroups, examPapers, paperStatusText, predictionText } from '~/utils/mockExam'
+import { EXAM_SECONDS, clockText, examGroups, examPapers, paperStatusText, predictionText, type ExamPaper } from '~/utils/mockExam'
 import {
   filterItems,
   filterLabels,
@@ -18,8 +18,8 @@ import {
 
 const props = defineProps<{ map: TopicMap }>()
 // navigate：點複習清單的題目，前往主題並直接打開那一題
-// exam：開始模擬考（考卷代號、要不要計時）
-const emit = defineEmits<{ navigate: [conceptId: string, questionId: string]; exam: [key: string, timed: boolean] }>()
+// exam：開始模擬考（哪一份考卷、要不要計時）
+const emit = defineEmits<{ navigate: [conceptId: string, questionId: string]; exam: [paper: ExamPaper, timed: boolean] }>()
 
 const { attempts, exams, wrongQuestionIds, markedQuestionIds, storageError, exportFile, importFile } = useRecords()
 const { soundOn, setSoundOn } = useSound()
@@ -54,9 +54,9 @@ const examList = computed(() => examGroups(examPapers(props.map)))
 const prediction = computed(() => predictionText(exams.value))
 const timed = ref(true)
 
-function startExam(key: string) {
+function startExam(paper: ExamPaper) {
   if (menu.value) menu.value.open = false
-  emit('exam', key, timed.value)
+  emit('exam', paper, timed.value)
 }
 
 const message = ref('')
@@ -109,7 +109,7 @@ async function onImport(event: Event) {
           <h4>{{ group.title }}</h4>
           <ul class="exam-list">
             <li v-for="paper in group.papers" :key="paper.key">
-              <button type="button" @click="startExam(paper.key)">
+              <button type="button" @click="startExam(paper)">
                 <span class="paper-title">{{ paper.title }}</span>
                 <span class="paper-score">{{ paperStatusText(exams, paper.session, paper.paper) }}</span>
               </button>

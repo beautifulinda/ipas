@@ -3,7 +3,7 @@
 import type { Question, TopicMap } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import type { Attempt } from '~/utils/progress'
-import { compareExams, isPastPaper, PAPER_SIZE, PAPER_SUBJECT, paperLabel } from '~/utils/pastPapers'
+import { comparePapersNewestFirst, isPastPaper, PAPER_SIZE, PAPER_SUBJECT, paperLabel, paperName } from '~/utils/pastPapers'
 
 // 初級每科 75 分鐘；剩 5 分鐘時提醒
 export const EXAM_SECONDS = 75 * 60
@@ -11,8 +11,6 @@ export const WARN_SECONDS = 5 * 60
 // 同時報考兩科：平均 70 分且每科不低於 60 分
 export const PASS_AVERAGE = 70
 export const PASS_EACH = 60
-// 交卷後不放升級演出，免得打斷看成績；城鎮等級照新的作答紀錄計算
-export const EXAM_CELEBRATES = false
 
 export const SUBMIT_CONFIRM = '確定交卷'
 export const KEEP_GOING = '繼續作答'
@@ -58,8 +56,6 @@ export interface ExamSession {
   answers: Map<number, string>
 }
 
-export const paperKey = (session: string, paper: number) => `${session}-${paper}`
-
 // 網站上所有考卷：依考科分成第一科（L11）、第二科（L12），梯次由新到舊
 export function examPapers(map: TopicMap): ExamPaper[] {
   const papers = new Map<string, ExamPaper>()
@@ -70,7 +66,7 @@ export function examPapers(map: TopicMap): ExamPaper[] {
           if (!isPastPaper(question)) continue
           // 同一題在不同場次考過時，每一份考卷都有它
           for (const exam of question.source.exams ?? []) {
-            const key = paperKey(exam.session, exam.paper)
+            const key = `${exam.session}-${exam.paper}`
             let paper = papers.get(key)
             if (!paper) {
               paper = {
@@ -90,16 +86,12 @@ export function examPapers(map: TopicMap): ExamPaper[] {
     }
   }
   for (const paper of papers.values()) paper.items.sort((a, b) => a.number - b.number)
-  return [...papers.values()].sort((a, b) => a.paper - b.paper || compareExams({ ...b, number: 0 }, { ...a, number: 0 }))
+  return [...papers.values()].sort((a, b) => a.paper - b.paper || comparePapersNewestFirst(a, b))
 }
 
 // 已下架幾題：一科本來 50 題
-export function removedCount(paper: ExamPaper) {
-  return Math.max(PAPER_SIZE - paper.items.length, 0)
-}
-
 export function removedText(paper: ExamPaper) {
-  const removed = removedCount(paper)
+  const removed = Math.max(PAPER_SIZE - paper.items.length, 0)
   return removed ? `這份考卷有 ${removed} 題已下架，分數只算 ${paper.items.length} 題` : undefined
 }
 
@@ -107,7 +99,7 @@ export function startExam(paper: ExamPaper, timed: boolean, now: number): ExamSe
   return { paper, timed, startedAt: now, answers: new Map() }
 }
 
-export function elapsedSeconds(session: ExamSession, now: number) {
+function elapsedSeconds(session: ExamSession, now: number) {
   return Math.max(Math.floor((now - session.startedAt) / 1000), 0)
 }
 
@@ -124,13 +116,9 @@ export function clockText(seconds: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export function unansweredCount(session: ExamSession) {
-  return session.paper.items.filter((item) => !session.answers.has(item.number)).length
-}
-
 // 還有題目沒作答就交卷時要先確認；全部作答過就直接交卷
 export function submitPrompt(session: ExamSession) {
-  const left = unansweredCount(session)
+  const left = session.paper.items.filter((item) => !session.answers.has(item.number)).length
   return left ? `還有 ${left} 題沒作答，確定交卷嗎？` : undefined
 }
 
@@ -194,25 +182,20 @@ export function durationText(result: ExamResult) {
   return result.timed ? `用時 ${used}／${clockText(EXAM_SECONDS)}` : `用時 ${used}`
 }
 
-const latestFirst = (a: ExamResult, b: ExamResult) => b.submittedAt.localeCompare(a.submittedAt)
-
-export function resultsOf(results: readonly ExamResult[], session: string, paper: number) {
-  return results.filter((r) => r.session === session && r.paper === paper).sort(latestFirst)
-}
-
 // 考卷清單上的文字：「還沒考過」「最近 78 分・考過 2 次」
 export function paperStatusText(results: readonly ExamResult[], session: string, paper: number) {
-  const mine = resultsOf(results, session, paper)
-  return mine.length ? `最近 ${mine[0].score} 分・考過 ${mine.length} 次` : '還沒考過'
+  const mine = results.filter((r) => r.session === session && r.paper === paper)
+  if (!mine.length) return '還沒考過'
+  const latest = mine.reduce((a, b) => (b.submittedAt > a.submittedAt ? b : a))
+  return `最近 ${latest.score} 分・考過 ${mine.length} 次`
 }
 
-const PAPER_NAMES: Record<number, string> = { 1: '第一科', 2: '第二科' }
-
 // 各科最近一次模擬考的分數（不分梯次）
-export function latestScores(results: readonly ExamResult[]) {
+function latestScores(results: readonly ExamResult[]) {
   const latest = new Map<number, ExamResult>()
-  for (const result of [...results].sort(latestFirst)) {
-    if (!latest.has(result.paper)) latest.set(result.paper, result)
+  for (const result of results) {
+    const current = latest.get(result.paper)
+    if (!current || result.submittedAt > current.submittedAt) latest.set(result.paper, result)
   }
   return latest
 }
@@ -227,7 +210,7 @@ export function predictionText(results: readonly ExamResult[]) {
   if (second === undefined) return `預估：第一科 ${first}・第二科還沒考過模擬考`
   const average = Math.round((first + second) / 2)
   const low = [first, second]
-    .map((score, i) => (score < PASS_EACH ? PAPER_NAMES[i + 1] : undefined))
+    .map((score, i) => (score < PASS_EACH ? paperName(i + 1) : undefined))
     .filter((name): name is string => Boolean(name))
   const verdict = low.length
     ? `${low.join('、')}低於 ${PASS_EACH} 分`
@@ -237,35 +220,12 @@ export function predictionText(results: readonly ExamResult[]) {
   return `預估：第一科 ${first}・第二科 ${second}・平均 ${average}，${verdict}`
 }
 
-const isDate = (value: unknown) => typeof value === 'string' && !Number.isNaN(Date.parse(value))
-
-// 匯入時檢查成績格式
-export function isExamResult(value: unknown): value is Omit<ExamResult, 'id'> {
-  if (typeof value !== 'object' || value === null) return false
-  const r = value as Record<string, unknown>
-  return (
-    typeof r.session === 'string' &&
-    (r.paper === 1 || r.paper === 2) &&
-    typeof r.score === 'number' &&
-    typeof r.correct === 'number' &&
-    typeof r.total === 'number' &&
-    typeof r.durationSeconds === 'number' &&
-    typeof r.timed === 'boolean' &&
-    typeof r.timedOut === 'boolean' &&
-    isDate(r.submittedAt)
-  )
-}
-
-export function stripExamResult({ session, paper, score, correct, total, durationSeconds, timed, timedOut, submittedAt }: Omit<ExamResult, 'id'>) {
-  return { session, paper, score, correct, total, durationSeconds, timed, timedOut, submittedAt }
-}
-
 // 考卷清單分成「L11 第一科」「L12 第二科」兩組
 export function examGroups(papers: readonly ExamPaper[]) {
   return ([1, 2] as const)
     .map((paper) => ({
       paper,
-      title: `${PAPER_SUBJECT[paper]} ${PAPER_NAMES[paper]}`,
+      title: `${PAPER_SUBJECT[paper]} ${paperName(paper)}`,
       papers: papers.filter((p) => p.paper === paper),
     }))
     .filter((group) => group.papers.length)

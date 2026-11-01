@@ -1,5 +1,5 @@
 // 作答紀錄、錯題本的格式、統計與匯出匯入，全部是純函式，方便測試
-import { isExamResult, stripExamResult, type ExamResult } from '~/utils/mockExam'
+import type { ExamResult } from '~/utils/mockExam'
 
 export interface Attempt {
   id?: number // IndexedDB 自動編號，匯出時不帶
@@ -136,8 +136,8 @@ export function toExport(
   attempts: Attempt[],
   dismissals: Dismissal[] = [],
   marks: Mark[] = [],
-  now = new Date(),
   exams: ExamResult[] = [],
+  now = new Date(),
 ): ExportFile {
   return {
     app: EXPORT_APP,
@@ -170,6 +170,27 @@ function isAttempt(value: unknown): value is Omit<Attempt, 'id'> {
   )
 }
 
+// 匯入時檢查成績格式
+function isExamResult(value: unknown): value is Omit<ExamResult, 'id'> {
+  if (typeof value !== 'object' || value === null) return false
+  const r = value as Record<string, unknown>
+  return (
+    typeof r.session === 'string' &&
+    (r.paper === 1 || r.paper === 2) &&
+    typeof r.score === 'number' &&
+    typeof r.correct === 'number' &&
+    typeof r.total === 'number' &&
+    typeof r.durationSeconds === 'number' &&
+    typeof r.timed === 'boolean' &&
+    typeof r.timedOut === 'boolean' &&
+    isDate(r.submittedAt)
+  )
+}
+
+function stripExamResult({ session, paper, score, correct, total, durationSeconds, timed, timedOut, submittedAt }: Omit<ExamResult, 'id'>) {
+  return { session, paper, score, correct, total, durationSeconds, timed, timedOut, submittedAt }
+}
+
 function isDismissal(value: unknown): value is Omit<Dismissal, 'id'> {
   if (typeof value !== 'object' || value === null) return false
   const d = value as Record<string, unknown>
@@ -199,14 +220,14 @@ export function parseExport(text: string): ImportedRecords {
     exams?: unknown
   } | null
   if (!file || file.app !== EXPORT_APP) throw new Error('這不是本網站匯出的學習紀錄檔。')
-  if (file.version !== 1 && file.version !== 2 && file.version !== 3 && file.version !== EXPORT_VERSION) {
-    throw new Error(`不支援的紀錄檔版本：${String(file.version)}。`)
+  const version = file.version
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > EXPORT_VERSION) {
+    throw new Error(`不支援的紀錄檔版本：${String(version)}。`)
   }
-  // 版本 1 沒有錯題本的移除紀錄
-  const dismissals = file.version === 1 ? [] : file.dismissals
-  // 版本 1、2 沒有不熟標記；版本 1～3 沒有模擬考成績
-  const marks = file.version === 1 || file.version === 2 ? [] : file.marks
-  const exams = file.version === EXPORT_VERSION ? file.exams : []
+  // 舊版沒有的紀錄當成空的：移除紀錄從版本 2、不熟標記從版本 3、模擬考成績從版本 4 開始
+  const dismissals = version >= 2 ? file.dismissals : []
+  const marks = version >= 3 ? file.marks : []
+  const exams = version >= 4 ? file.exams : []
   if (
     !Array.isArray(file.attempts) ||
     !file.attempts.every(isAttempt) ||

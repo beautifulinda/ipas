@@ -37,9 +37,14 @@ export function sessionLabel(session: string) {
   return parsed ? `${parsed.year} 年第${chineseNumber(parsed.round)}次` : session
 }
 
+// 1 → "第一科"
+export function paperName(paper: number) {
+  return `第${chineseNumber(paper)}科`
+}
+
 // "114 年第四次 第一科"
 export function paperLabel(session: string, paper: number) {
-  return `${sessionLabel(session)} 第${chineseNumber(paper)}科`
+  return `${sessionLabel(session)} ${paperName(paper)}`
 }
 
 export function examLabel(exam: PastExam) {
@@ -51,6 +56,11 @@ export function compareExams(a: PastExam, b: PastExam) {
   const sa = parseSession(a.session)
   const sb = parseSession(b.session)
   return (sa?.year ?? 0) - (sb?.year ?? 0) || (sa?.round ?? 0) - (sb?.round ?? 0) || a.paper - b.paper || a.number - b.number
+}
+
+// 考卷（梯次＋考科）由新到舊排序，同一梯次第一科在前
+export function comparePapersNewestFirst(a: Omit<PastExam, 'number'>, b: Omit<PastExam, 'number'>) {
+  return compareExams({ ...b, number: 0 }, { ...a, number: 0 })
 }
 
 const examsOf = (question: Question) => question.source.exams ?? []

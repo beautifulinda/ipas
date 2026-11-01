@@ -96,6 +96,10 @@ export function findRegion(world: World, title: string) {
   return found
 }
 
+export function allConcepts(world: World) {
+  return world.map.subjects.flatMap((s) => s.categories.flatMap((c) => c.concepts))
+}
+
 // 需求裡沒有指名主題時，指的是背景建立的第一個主題
 export function mainConcept(world: World) {
   return world.map.subjects[0].categories[0].concepts[0]

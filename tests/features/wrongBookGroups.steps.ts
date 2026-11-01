@@ -1,11 +1,11 @@
 // 〈錯題本〉分科目、分梯次的步驟定義
 import { Given, Then, When } from 'quickpickle'
 import { expect } from 'vitest'
-import type { Concept, PastExam, Question, TopicMap } from '~/types/map'
+import type { Question, TopicMap } from '~/types/map'
 import { paperLabel } from '~/utils/pastPapers'
 import { groupEmptyText, groupScoreLabel, subjectTabLabel, wrongBookBySubject } from '~/utils/wrongBook'
-import { question } from '../unit/fixtures'
-import { answer, book, type World } from './world'
+import { pastConcept, pastQuestion as past, question } from '../unit/fixtures'
+import { allConcepts, answer, book, type World } from './world'
 
 interface GroupWorld extends World {
   // 正在看的科目分頁；沒選時和畫面一樣，先顯示有錯題的科目
@@ -19,17 +19,11 @@ interface GroupWorld extends World {
 const L11_SESSIONS = ['114-S4', '115-S1', '115-S3']
 const L12_SESSIONS = ['115-S3']
 
-function past(session: string, paper: 1 | 2, number: number): Question {
-  const exams: PastExam[] = [{ session, paper, number }]
-  return { ...question(`${session}-${paper}-${number}`), source: { type: 'official-past', exams } }
-}
-
 function paperQuestions(sessions: string[], paper: 1 | 2) {
   return sessions.flatMap((session) => Array.from({ length: 50 }, (_, i) => past(session, paper, i + 1)))
 }
 
 function examMap(): TopicMap {
-  const pastConcept = (id: string, questions: Question[]): Concept => ({ id, title: id, summary: '', keyPoints: [], questions })
   return {
     version: '1',
     updatedAt: '2026-10-26',
@@ -61,10 +55,6 @@ function examMap(): TopicMap {
 // 背景建立的是單一科目的題庫，這裡的場景改用分科目的假題庫
 function useExamMap(world: GroupWorld) {
   if (world.map.subjects[0].id !== 'L11') world.map = examMap()
-}
-
-function allConcepts(world: World) {
-  return world.map.subjects.flatMap((s) => s.categories.flatMap((c) => c.concepts))
 }
 
 function answerQuestion(world: World, id: string, correct: boolean) {

@@ -1,4 +1,4 @@
-import type { Concept, Question, TopicMap } from '~/types/map'
+import type { Concept, PastExam, Question, TopicMap } from '~/types/map'
 import type { Attempt } from '~/utils/progress'
 
 export function question(id: string, reviewed = true): Question {
@@ -20,6 +20,21 @@ export function question(id: string, reviewed = true): Question {
 
 export function concept(id: string, questions: Question[] = []): Concept {
   return { id, title: `概念 ${id}`, summary: '', keyPoints: [], questions }
+}
+
+// 假的考古題：某梯次某科第幾題，四個選項、正確答案是 A；題目內容一律是假的
+export function pastQuestion(session: string, paper: 1 | 2, number: number): Question {
+  const exams: PastExam[] = [{ session, paper, number }]
+  return {
+    ...question(`${session}-${paper}-${number}`),
+    options: ['A', 'B', 'C', 'D'].map((id) => ({ id, text: `選項 ${id}` })),
+    source: { type: 'official-past', exams },
+  }
+}
+
+// 標題和 ID 相同的主題
+export function pastConcept(id: string, questions: Question[]): Concept {
+  return { id, title: id, summary: '', keyPoints: [], questions }
 }
 
 // 一座島（S1）兩個地區：C1 有兩個概念、C2 有一個概念

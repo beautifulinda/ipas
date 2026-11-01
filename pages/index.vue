@@ -5,7 +5,7 @@ import type { TopicMap } from '~/types/map'
 import mapData from '#map-data'
 import { findConcept, practiceQuestions } from '~/utils/concepts'
 import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
-import { EXAM_CELEBRATES, examPapers, type ExamOutcome } from '~/utils/mockExam'
+import type { ExamOutcome, ExamPaper } from '~/utils/mockExam'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import type { MapControls } from '~/composables/useMapKeyboard'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
@@ -69,11 +69,9 @@ watch(concept, () => {
 })
 // 全螢幕作答時，背景的頁首、地圖、面板、頁尾設為 inert，Tab 與報讀軟體都不會跑到後面；升級卡不在其中，照樣唸得出來
 // 模擬考（需求在 tests/features/模擬考.feature）：桌面和手機都是全螢幕
-const papers = examPapers(map)
-const exam = ref<{ key: string; timed: boolean }>()
-const examPaper = computed(() => papers.find((p) => p.key === exam.value?.key))
-const practiceShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value && !examPaper.value))
-const quizShown = computed(() => practiceShown.value || Boolean(examPaper.value))
+const exam = ref<{ paper: ExamPaper; timed: boolean }>()
+const practiceShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value))
+const quizShown = computed(() => practiceShown.value || Boolean(exam.value))
 
 // 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出
 const progression = computed(() => computeProgression(map, attempts.value))
@@ -140,12 +138,11 @@ watch(
   },
   { immediate: true },
 )
-// 模擬考交卷時不放升級演出，免得打斷看成績
-let muted = false
 watch(progression, (after, before) => {
   if (!armed || !before) return
   saveSnapshot()
-  if (muted) return
+  // 模擬考交卷時不放升級演出，免得打斷看成績（交卷後成績畫面還開著）
+  if (exam.value) return
   const plan = celebrationFor(newMilestones(map, before, after), {
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     soundOn: soundOn.value,
@@ -224,14 +221,8 @@ function goUp() {
   if (parent) focusId.value = parent.id
 }
 
-async function onExamSubmitted(outcome: ExamOutcome) {
-  muted = !EXAM_CELEBRATES
-  try {
-    await recordExam(outcome.result, outcome.attempts)
-    await nextTick()
-  } finally {
-    muted = false
-  }
+function onExamSubmitted(outcome: ExamOutcome) {
+  recordExam(outcome.result, outcome.attempts)
 }
 
 function onAnswered(questionId: string, choice: string, correct: boolean) {
@@ -250,7 +241,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
             <button type="button" :aria-pressed="view === 'map'" @click="view = 'map'">地圖</button>
             <button type="button" :aria-pressed="view === 'list'" @click="view = 'list'">清單</button>
           </div>
-          <RecordMenu :map="map" @navigate="onReview" @exam="(key, timed) => (exam = { key, timed })" />
+          <RecordMenu :map="map" @navigate="onReview" @exam="(paper, timed) => (exam = { paper, timed })" />
         </div>
       </div>
       <p class="disclaimer">
@@ -327,9 +318,9 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
     />
 
     <MockExam
-      v-if="examPaper && exam"
-      :key="`${examPaper.key}-${exam.timed}`"
-      :paper="examPaper"
+      v-if="exam"
+      :key="`${exam.paper.key}-${exam.timed}`"
+      :paper="exam.paper"
       :timed="exam.timed"
       @close="exam = undefined"
       @submitted="onExamSubmitted"

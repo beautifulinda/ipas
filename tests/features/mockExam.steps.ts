@@ -1,9 +1,8 @@
 // 〈模擬考〉的步驟定義
 import { Given, Then, When } from 'quickpickle'
 import { expect } from 'vitest'
-import type { Concept, PastExam, Question, TopicMap } from '~/types/map'
+import type { TopicMap } from '~/types/map'
 import {
-  EXAM_CELEBRATES,
   LEAVE_PROMPT,
   TIMED_OUT_TEXT,
   clockText,
@@ -29,8 +28,8 @@ import {
 import { paperLabel } from '~/utils/pastPapers'
 import { computeProgression } from '~/utils/progression'
 import { wrongBook } from '~/utils/progress'
-import { question } from '../unit/fixtures'
-import type { World } from './world'
+import { pastConcept, pastQuestion as past } from '../unit/fixtures'
+import { allConcepts, numbers, type World } from './world'
 
 interface ExamWorld extends World {
   results: ExamResult[]
@@ -45,17 +44,7 @@ interface ExamWorld extends World {
 
 // 假題庫：L11 有 115-S3 第一科；L12 有 115-S3、115-S2 第二科，分在兩個主題（第 1～25 題、第 26～50 題）
 // 題目內容一律是假的，正確答案都是 A
-function past(session: string, paper: 1 | 2, number: number): Question {
-  const exams: PastExam[] = [{ session, paper, number }]
-  return {
-    ...question(`${session}-${paper}-${number}`),
-    options: ['A', 'B', 'C', 'D'].map((id) => ({ id, text: `選項 ${id}` })),
-    source: { type: 'official-past', exams },
-  }
-}
-
-const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
-const pastConcept = (id: string, questions: Question[]): Concept => ({ id, title: id, summary: '', keyPoints: [], questions })
+const range = (from: number, to: number) => numbers(`${from}～${to}`)
 
 function examMap(): TopicMap {
   const l12 = (numbers: number[]) => [...numbers.map((n) => past('115-S3', 2, n)), ...numbers.map((n) => past('115-S2', 2, n))]
@@ -270,7 +259,6 @@ Then(/^第 (\d+) 題沒有作答紀錄$/, (world: ExamWorld, n) => {
 })
 
 Then('交卷後不放升級煙火與升級卡', (world: ExamWorld) => {
-  expect(EXAM_CELEBRATES).toBe(false)
   expect(world.plan).toBeUndefined()
 })
 
@@ -321,7 +309,7 @@ Then(/^畫面顯示「(預估：.+)」$/, (world: ExamWorld, text) => {
 
 Given(/^「([^」]+)」有 (\d+) 題已下架$/, (world: ExamWorld, title, count) => {
   const ids = new Set(findPaper(world, title).items.slice(-Number(count)).map((item) => item.question.id))
-  for (const concept of world.map.subjects.flatMap((s) => s.categories.flatMap((c) => c.concepts))) {
+  for (const concept of allConcepts(world)) {
     concept.questions = concept.questions.filter((q) => !ids.has(q.id))
   }
 })

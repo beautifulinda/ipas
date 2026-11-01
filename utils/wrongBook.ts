@@ -3,7 +3,7 @@
 import type { Question, TopicMap } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import { reviewList } from '~/utils/progress'
-import { compareExams, isPastPaper, PAPER_SIZE, paperLabel } from '~/utils/pastPapers'
+import { comparePapersNewestFirst, isPastPaper, PAPER_SIZE, paperLabel } from '~/utils/pastPapers'
 
 export interface WrongItem {
   question: Question
@@ -86,7 +86,7 @@ export function wrongBookBySubject(
     const byRank = (a: WrongItem, b: WrongItem) => rank.get(a.question.id)! - rank.get(b.question.id)!
     // 梯次由新到舊；自編題有要複習的題目才列出，排最後
     const groups = [...papers.values()]
-      .sort((a, b) => compareExams({ ...b, number: 0 }, { ...a, number: 0 }))
+      .sort(comparePapersNewestFirst)
       .map(({ group }) => group)
     if (original.items.length) groups.push(original)
     for (const group of groups) group.items.sort(byRank)

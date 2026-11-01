@@ -2,6 +2,8 @@
 import {
   KEEP_GOING,
   LEAVE_PROMPT,
+  PASS_AVERAGE,
+  PASS_EACH,
   SUBMIT_CONFIRM,
   TIMED_OUT_TEXT,
   clockText,
@@ -38,21 +40,32 @@ const warning = computed(() => (outcome.value ? undefined : timeWarning(session,
 
 function finish(timedOut = false) {
   if (outcome.value) return
+  clearInterval(timer)
   asking.value = undefined
   outcome.value = gradeExam(session, Date.now(), timedOut)
   emit('submitted', outcome.value)
   nextTick(() => resultHeading.value?.focus())
 }
 
+// 只有計時才每秒更新；交卷後停止
 let timer: ReturnType<typeof setInterval> | undefined
+const resultHeading = ref<HTMLElement>()
+// 關閉後焦點回到打開前的位置
+let opener: HTMLElement | null = null
 onMounted(() => {
+  opener = document.activeElement as HTMLElement | null
+  focusOptions()
+  if (!props.timed) return
   timer = setInterval(() => {
     now.value = Date.now()
     // 時間到不詢問，直接交卷
-    if (!outcome.value && isTimeUp(session, now.value)) finish(true)
+    if (isTimeUp(session, now.value)) finish(true)
   }, 1000)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  if (opener?.isConnected) opener.focus({ preventScroll: true })
+})
 
 // 還有題目沒作答就先確認；全部作答過直接交卷
 function onSubmit() {
@@ -90,10 +103,11 @@ function focusOptions() {
 // 上下鍵選答案（頭尾停住），左右鍵換題
 function onOptionsKeydown(event: KeyboardEvent) {
   const options = item.value.question.options
-  const current = options.findIndex((o) => o.id === session.answers.get(item.value.number))
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
-    const next = current < 0 ? 0 : Math.min(Math.max(current + (event.key === 'ArrowDown' ? 1 : -1), 0), options.length - 1)
+    // 還沒選時按上下都先選第一個
+    const step = session.answers.has(item.value.number) ? (event.key === 'ArrowDown' ? 1 : -1) : 0
+    const next = Math.min(Math.max(tabStop.value + step, 0), options.length - 1)
     choose(options[next].id)
     optionEls.value[next]?.focus()
   } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -112,17 +126,6 @@ function go(to: number) {
     focusOptions()
   })
 }
-
-const closeButton = ref<HTMLButtonElement>()
-const resultHeading = ref<HTMLElement>()
-let opener: HTMLElement | null = null
-onMounted(() => {
-  opener = document.activeElement as HTMLElement | null
-  focusOptions()
-})
-onUnmounted(() => {
-  if (opener?.isConnected) opener.focus({ preventScroll: true })
-})
 
 // Tab 在作答畫面裡循環
 const dialogEl = ref<HTMLElement>()
@@ -163,25 +166,21 @@ function optionText(question: ExamPaper['items'][number]['question'], id?: strin
       <header class="exam-header">
         <h2 id="exam-title">{{ paper.title }}・模擬考</h2>
         <!-- 倒數每秒更新，不讓報讀軟體每秒唸；剩 5 分鐘的提醒另外唸 -->
-        <p v-if="remaining !== undefined && !outcome" class="clock" :class="{ low: warning }">
+        <p v-if="!outcome && remaining !== undefined" class="clock" :class="{ low: warning }">
           <span class="visually-hidden">剩餘時間</span>{{ clockText(remaining) }}
         </p>
         <button v-if="!outcome" type="button" class="submit" @click="onSubmit">交卷</button>
-        <button ref="closeButton" type="button" class="close" :aria-label="outcome ? '關閉' : '離開'" @click="onClose">✕</button>
+        <button type="button" class="close" :aria-label="outcome ? '關閉' : '離開'" @click="onClose">✕</button>
       </header>
       <p class="warning" role="alert">{{ warning ?? '' }}</p>
 
       <div v-if="asking" ref="askEl" class="ask" role="alertdialog" aria-labelledby="exam-ask">
         <p id="exam-ask">{{ askText }}</p>
         <div class="ask-actions">
-          <template v-if="asking === 'submit'">
-            <button type="button" @click="keepGoing">{{ KEEP_GOING }}</button>
-            <button type="button" class="primary" @click="finish()">{{ SUBMIT_CONFIRM }}</button>
-          </template>
-          <template v-else>
-            <button type="button" @click="keepGoing">{{ KEEP_GOING }}</button>
-            <button type="button" class="primary" @click="emit('close')">確定離開</button>
-          </template>
+          <button type="button" @click="keepGoing">{{ KEEP_GOING }}</button>
+          <button type="button" class="primary" @click="asking === 'submit' ? finish() : emit('close')">
+            {{ asking === 'submit' ? SUBMIT_CONFIRM : '確定離開' }}
+          </button>
         </div>
       </div>
 
@@ -235,7 +234,7 @@ function optionText(question: ExamPaper['items'][number]['question'], id?: strin
         <p class="summary">{{ correctText(outcome.result) }}・{{ durationText(outcome.result) }}</p>
         <p v-if="outcome.result.timedOut" class="note">{{ TIMED_OUT_TEXT }}</p>
         <p v-if="removedText(paper)" class="note">{{ removedText(paper) }}</p>
-        <p class="note">及格標準：兩科同時報考時平均 70 分，且每科不低於 60 分。答錯的題目已加進複習清單。</p>
+        <p class="note">及格標準：兩科同時報考時平均 {{ PASS_AVERAGE }} 分，且每科不低於 {{ PASS_EACH }} 分。答錯的題目已加進複習清單。</p>
 
         <h4 v-if="outcome.wrong.length">答錯 {{ outcome.wrong.length }} 題</h4>
         <ol class="wrong-list">

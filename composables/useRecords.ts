@@ -111,7 +111,7 @@ async function recordExam(result: Omit<ExamResult, 'id'>, examAttempts: Omit<Att
 }
 
 function exportFile() {
-  const data = toExport(attempts.value, dismissals.value, marks.value, new Date(), exams.value)
+  const data = toExport(attempts.value, dismissals.value, marks.value, exams.value)
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
