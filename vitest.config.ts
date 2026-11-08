@@ -24,6 +24,7 @@ export default defineConfig({
       'tests/features/nextStop.steps.ts',
       'tests/features/marks.steps.ts',
       'tests/features/mockExam.steps.ts',
+      'tests/features/paperEntry.steps.ts',
     ],
   },
 })
