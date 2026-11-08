@@ -10,7 +10,7 @@
 
 ## 已確定的決策
 
-- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 Three.js（3D 低多邊形，2026-10-20 由作者決定從 SVG 改為 3D），鏡頭飛行、升級特寫、升級演出時間軸、建築換代、雲霧散開、升旗用 GSAP（2026-11-08 作者決定試用，分支 `gsap-celebration`；地圖每格繪圖掛在 `gsap.ticker` 上，和補間動畫共用一個時鐘；海浪、雲飄、旗子擺動等持續動作仍在每格更新），版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap、polygon-clipping；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
+- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 Three.js（3D 低多邊形，2026-10-20 由作者決定從 SVG 改為 3D），鏡頭飛行、升級特寫、升級演出時間軸、建築換代、雲霧散開、升旗用 GSAP（2026-11-08 作者決定採用，已合併進 `main`；地圖每格繪圖掛在 `gsap.ticker` 上，和補間動畫共用一個時鐘；海浪、雲飄、旗子擺動等持續動作仍在每格更新），版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap、polygon-clipping；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
 - TypeScript 固定 5.9：7.x 與 vue-tsc 不相容。型別檢查用 `npm run typecheck`。
 - 部署：`nuxt generate` 產生靜態網站，GitHub Actions 部署到 GitHub Pages。
 - 子路徑部署：`nuxt.config.ts` 必須設定 `app.baseURL: '/ipas/'`，否則上線後靜態資源路徑錯誤。
@@ -78,6 +78,7 @@
    - 標記不熟（作者 2026-10-30 審過，需求在 `tests/features/標記不熟.feature`）：做題時覺得觀念不熟可以按「🔖 標記不熟」（作答前後都可以，按鈕在題目上方，才不會擋到送出後 Tab 到「下一題」）；答對不會拿掉，只有按「我懂了」才拿掉，「我懂了」只拿掉標記、不動錯題本。錯題本改名「複習清單」，錯題與不熟的題目列在一起，每題標「答錯」「不熟」，可篩選「全部／答錯 N／不熟 N」；頁首「學習紀錄（複習 N）」與科目分頁「L11・複習 N」算兩種合計、同一題只算一次；考古題梯次的「錯 N／50」只算錯題。點清單裡的題目直接打開那一題（`pages/index.vue` 的 `onReview`，`PracticeSection` 的 `startQuestion`）。標記不影響城鎮等級。
    - 島嶼地形（作者 2026-10-30 決定）：顏色維持原本的配色，只把島做得圓潤立體。原本是平的擠出陸塊加台階，改成三角網格的高度地形（`utils/scene/terrain.ts`）：海岸像饅頭邊緣圓滑隆起、中間拱起、內陸有起伏的小丘，城鎮周圍整平；靠近海岸的頂點吸到海岸線上，水面交界才平滑；地區交界的三角面壓深當分界線；白霧貼著地形。有試過極光夜空、深藍海、浮空水晶岩的配色，作者比較喜歡原本的顏色，已撤回。
    - 模擬考（作者 2026-11-01 審過，需求在 `tests/features/模擬考.feature`，規則在 `utils/mockExam.ts`、畫面在 `components/MockExam.vue`）：考古題全部混在主題裡很難估單次分數、也一直卡在第一科，所以「學習紀錄」加「模擬考」，依考科分「L11 第一科」「L12 第二科」、梯次由新到舊，可以直接點第二科。照官方題號寫完一份 50 題，交卷前不顯示對錯、可改答案；預設計時 75 分鐘（簡章 115.04 版第 8 頁：初級每科 50 題、75 分鐘），可選不計時，剩 5 分鐘提醒、時間到自動交卷；還有題目沒作答時先確認，沒作答的算錯。分數＝答對率換 100 分，題目下架時只算網站上還有的題目。交卷後有作答的題目照常記成作答紀錄（進複習清單、算城鎮等級），沒作答的不記，不放升級演出；中途離開不保存。考卷清單顯示「最近 78 分・考過 2 次」，並用兩科各自最近一次的分數預估：同時報考兩科時平均 70 分且每科不低於 60 分（iPAS 官網〈考試資訊〉）。桌面與手機都是全螢幕。
+   - 梯次入口（作者 2026-11-08 決定，需求在 `tests/features/梯次入口.feature`、`梯次入口（沒有考古題）.feature`，規則在 `utils/paperEntry.ts`、畫面在 `components/PaperEntry.vue`、轉場在 `utils/entryTransition.ts`）：網址沒有參數時每次打開都先列出梯次（左邊第一科、右邊第二科，不記住上次的考卷），點一份用 GSAP 轉場飛到那一科的島，網址 `?paper=115-S3-2`，`?paper=all` 是全部梯次；只有 `?at=` 的舊連結直接進地圖並補上 `paper=all`（`useFocusHistory`）。選了考卷後題目、進度圓餅、題數、「從這裡開始」「下一站」只算這一份，城鎮等級、雲霧、旗子、燈塔與升級演出照全部題目算；沒考到的主題標籤變淡、面板提示「看全部梯次的題目」；自編題只在全部梯次出現；同一題考過多次時每個梯次都算。頁首有「目前：…」「看全部梯次」「回梯次列表」。網址參數在首頁讀 `router.currentRoute`：hydration 剛完成時 `useRoute()` 還是靜態 HTML 的網址，舊連結會先閃一下入口。入口開著時背景 `inert`、地圖不處理按鍵。
    - 移除紀錄存在 IndexedDB 的 `dismissals`、不熟標記存在 `marks`（每筆是標記或拿掉，每題以最後一筆為準）、模擬考成績存在 `exams`（資料庫版本 4，舊版升級會保留舊紀錄）；匯出檔版本 4 含 `dismissals`、`marks` 與 `exams`，仍可匯入版本 1～3。
 5. CI：✅ JSON 格式與 `reviewed` 檢查、型別檢查、Vitest 單元測試（`tests/unit/`，只測 `utils/` 的純函式，`npm test`）、Playwright E2E，全部通過才部署；PR 只跑檢查不部署。
    - 需求測試（作者 2026-10-21 決定）：功能需求用正體中文 Gherkin（`# language: zh-TW`，假設／當／那麼／而且／但是）寫在 `tests/features/*.feature`，每個功能都要有 Happy Path 與 Sad Path，用詞要讓作者不看程式碼就能審。由 quickpickle 在 Vitest 執行，步驟定義在 `tests/features/*.steps.ts`（要加進 `vitest.config.ts` 的 `setupFiles`）。新的需求檔先給作者審過再實作步驟。
