@@ -30,5 +30,7 @@ export default defineNuxtConfig({
     '#map-data': fileURLToPath(new URL(e2e ? './tests/e2e/fixtures/map.json' : './data/map.json', import.meta.url)),
     '#private-data': fileURLToPath(new URL(e2e ? './tests/e2e/fixtures/no-private' : './data/private', import.meta.url)),
   },
+  // 本機 dev server 給手機透過 Tailscale 試用（http://mac-mini.tailc06ebc.ts.net:3001/ipas/）；只影響 nuxt dev，不影響部署
+  vite: { server: { allowedHosts: ['.ts.net'] } },
   ...(e2e && { nitro: { output: { dir: '.output-e2e' } } }),
 })
