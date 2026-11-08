@@ -10,7 +10,7 @@
 
 ## 已確定的決策
 
-- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 Three.js（3D 低多邊形，2026-10-20 由作者決定從 SVG 改為 3D），版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap、polygon-clipping；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
+- 技術：Nuxt 3、Vue 3、TypeScript；地圖用 Three.js（3D 低多邊形，2026-10-20 由作者決定從 SVG 改為 3D），鏡頭飛行、升級特寫、升級演出時間軸、建築換代、雲霧散開、升旗用 GSAP（2026-11-08 作者決定試用，分支 `gsap-celebration`；地圖每格繪圖掛在 `gsap.ticker` 上，和補間動畫共用一個時鐘；海浪、雲飄、旗子擺動等持續動作仍在每格更新），版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）加 d3-voronoi-treemap、polygon-clipping；裝置判斷與尺寸用 VueUse（`useMediaQuery`、`useElementSize`）。
 - TypeScript 固定 5.9：7.x 與 vue-tsc 不相容。型別檢查用 `npm run typecheck`。
 - 部署：`nuxt generate` 產生靜態網站，GitHub Actions 部署到 GitHub Pages。
 - 子路徑部署：`nuxt.config.ts` 必須設定 `app.baseURL: '/ipas/'`，否則上線後靜態資源路徑錯誤。

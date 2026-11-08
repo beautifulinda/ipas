@@ -1,4 +1,5 @@
 import { polygonCentroid, polygonContains } from 'd3-polygon'
+import gsap from 'gsap'
 import polygonClipping from 'polygon-clipping'
 import * as THREE from 'three'
 import { seededRandom, type BBox, type Point, type WorldLayout } from '~/utils/islandLayout'
@@ -69,16 +70,12 @@ export function buildWorld3D(world: WorldLayout): World3D {
   const bounds = new Map<string, BBox>()
   const anchors = new Map<string, THREE.Vector3>()
 // 建築換代的動畫：舊建築縮進塵土（0.25 秒），新建築回彈長出（0.7 秒）
-  interface Swap {
-    old?: THREE.Object3D
-    oldScale: number
-    scale: number
-    t: number
-  }
-  const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; height: number; swap?: Swap }>()
+  // 彈簧曲線：衝過頭再回彈
+  const spring = (k: number) => 1 - Math.cos(k * Math.PI * 2.5) * Math.exp(-k * 5)
+const towns = new Map<string, { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; height: number; swap?: gsap.core.Timeline }>()
   const effects: Effect[] = []
-  const fogs = new Map<string, { group: THREE.Group; fading: number }>()
-  const flags = new Map<string, { flag: THREE.Group; position: THREE.Vector3; raising: number }>()
+  const fogs = new Map<string, { group: THREE.Group; fading?: gsap.core.Tween }>()
+  const flags = new Map<string, { flag: THREE.Group; position: THREE.Vector3; raising?: gsap.core.Tween }>()
   const lighthouses = new Map<string, { group: THREE.Group; position: THREE.Vector3 }>()
 
   world.islands.forEach((island) => {
@@ -155,7 +152,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
         i++
       }
       islandGroup.add(fog)
-      fogs.set(region.id, { group: fog, fading: -1 })
+      fogs.set(region.id, { group: fog })
 
       // 旗子位置：地區名稱旁邊，完成時才升起
       const flag = makeFlag()
@@ -164,7 +161,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
       flag.position.copy(flagPosition)
       flag.visible = false
       islandGroup.add(flag)
-      flags.set(region.id, { flag, position: flagPosition, raising: -1 })
+      flags.set(region.id, { flag, position: flagPosition })
     }
 
     // 山、山丘與樹
@@ -232,24 +229,25 @@ export function buildWorld3D(world: WorldLayout): World3D {
       town.height = new THREE.Box3().setFromObject(building).max.y
       // 只有升級才播換代動畫；降級、第一次載入、減少動態效果時直接換掉
       const old = animate && town.level >= 0 && level > town.level ? town.group.children[0] : undefined
+      town.swap?.kill()
+      town.swap = undefined
       town.group.clear()
       town.group.add(building)
-      town.swap = undefined
+      town.level = level
       if (old) {
         town.group.add(old)
-        town.swap = { old, oldScale: old.scale.x, scale: building.scale.x, t: 0 }
-        building.scale.setScalar(0.001)
+        town.swap = swapBuildings(town, old, building)
       }
-      town.level = level
     }
     for (const [id, fog] of fogs) {
       const explored = progression.exploredRegions.has(id)
       if (!explored) {
+        fog.fading?.kill()
+        fog.fading = undefined
         fog.group.visible = true
         fog.group.scale.setScalar(1)
-        fog.fading = -1
-      } else if (fog.group.visible) {
-        if (animate) fog.fading = 0
+      } else if (fog.group.visible && !fog.fading) {
+        if (animate) fog.fading = fadeFog(fog)
         else fog.group.visible = false
       }
     }
@@ -257,37 +255,74 @@ export function buildWorld3D(world: WorldLayout): World3D {
       const done = progression.flaggedRegions.has(id)
       if (done && !flag.flag.visible) {
         flag.flag.visible = true
-        flag.raising = animate ? 0 : 1
-        flag.flag.scale.y = animate ? 0.01 : 1
+        flag.flag.scale.y = 1
+        // 升旗：由下往上拉起，約 0.67 秒
+        if (animate) flag.raising = gsap.from(flag.flag.scale, { y: 0.01, duration: 1 / 1.5, ease: 'none' })
       } else if (!done) {
+        flag.raising?.kill()
+        flag.raising = undefined
         flag.flag.visible = false
       }
     }
     for (const [id, lighthouse] of lighthouses) setLighthouseLit(lighthouse.group, progression.litIslands.has(id))
   }
 
-  function animateSwap(town: { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3; swap?: Swap }, dt: number) {
-    const swap = town.swap!
-    swap.t += dt
-    if (swap.old) {
-      const k = Math.min(1, swap.t / 0.25)
-      swap.old.scale.setScalar(swap.oldScale * (1 - k))
-      if (k < 1) return
-      swap.old.removeFromParent()
-      swap.old = undefined
-      const dust = makeDustRing(town.position, town.level === 3 ? 15 : 10)
-      root.add(dust.object)
-      effects.push(dust)
-    }
-    // 彈簧曲線：衝過頭再回彈，長出時略為拉高
-    const k = Math.min(1, (swap.t - 0.25) / 0.7)
-    const s = 1 - Math.cos(k * Math.PI * 2.5) * Math.exp(-k * 5)
-    const building = town.group.children[0]
-    building.scale.set(swap.scale * s, swap.scale * Math.max(0.05, s * (1 + Math.sin(k * Math.PI) * 0.12)), swap.scale * s)
-    if (k >= 1) {
-      building.scale.setScalar(swap.scale)
-      town.swap = undefined
-    }
+  function swapBuildings(town: { group: THREE.Group; level: TownLevel | -1; position: THREE.Vector3 }, old: THREE.Object3D, building: THREE.Object3D) {
+    const oldScale = old.scale.x
+    const scale = building.scale.x
+    building.scale.setScalar(0.001)
+    const grow = { k: 0 }
+    return gsap
+      .timeline()
+      .to(old.scale, { x: 0, y: 0, z: 0, duration: 0.25, ease: 'none', startAt: { x: oldScale, y: oldScale, z: oldScale } })
+      .call(() => {
+        old.removeFromParent()
+        const dust = makeDustRing(town.position, town.level === 3 ? 15 : 10)
+        root.add(dust.object)
+        effects.push(dust)
+      })
+      .to(grow, {
+        k: 1,
+        duration: 0.7,
+        ease: 'none',
+        // 長出時略為拉高
+        onUpdate: () => {
+          const s = spring(grow.k)
+          building.scale.set(scale * s, scale * Math.max(0.05, s * (1 + Math.sin(grow.k * Math.PI) * 0.12)), scale * s)
+        },
+        onComplete: () => building.scale.setScalar(scale),
+      })
+  }
+
+  // 雲霧散開：1.2 秒內雲往上飄、放大、變透明
+  function fadeFog(fog: { group: THREE.Group; fading?: gsap.core.Tween }) {
+    const clouds = fog.group.children.slice(1)
+    const baseY = clouds.map((c) => c.position.y)
+    const materials: THREE.Material[] = []
+    fog.group.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined
+      if (!m) return
+      // 記住原本的透明度，淡出時依比例遞減
+      m.userData.baseOpacity ??= m.opacity
+      materials.push(m)
+    })
+    const progress = { t: 0 }
+    return gsap.to(progress, {
+      t: 1,
+      duration: 1.2,
+      ease: 'none',
+      onUpdate: () => {
+        clouds.forEach((c, i) => {
+          c.scale.setScalar(1 + progress.t * 0.6)
+          c.position.y = baseY[i] + progress.t * 24
+        })
+        for (const m of materials) m.opacity = m.userData.baseOpacity * (1 - progress.t)
+      },
+      onComplete: () => {
+        fog.group.visible = false
+        fog.fading = undefined
+      },
+    })
   }
 
   function animateWorld(time: number, dt: number, motion: boolean) {
@@ -298,29 +333,7 @@ export function buildWorld3D(world: WorldLayout): World3D {
       effects.splice(i, 1)
     }
     for (const town of towns.values()) {
-      if (town.swap) animateSwap(town, dt)
       ;(town.group.children[0]?.userData.tick as BuildingTick | undefined)?.(time, dt, motion)
-    }
-    for (const fog of fogs.values()) {
-      if (fog.fading < 0 || !fog.group.visible) continue
-      fog.fading += dt
-      const t = Math.min(1, fog.fading / 1.2)
-      for (const child of fog.group.children) {
-        if (child === fog.group.children[0]) continue
-        child.scale.setScalar(1 + t * 0.6)
-        child.position.y += dt * 20
-      }
-      fog.group.traverse((o) => {
-        const m = (o as THREE.Mesh).material as THREE.Material | undefined
-        if (!m) return
-        // 記住原本的透明度，淡出時依比例遞減
-        m.userData.baseOpacity ??= m.opacity
-        m.opacity = m.userData.baseOpacity * (1 - t)
-      })
-      if (t >= 1) {
-        fog.group.visible = false
-        fog.fading = -1
-      }
     }
     for (const fog of fogs.values()) {
       // 雲輕輕飄動
@@ -328,10 +341,6 @@ export function buildWorld3D(world: WorldLayout): World3D {
     }
     for (const flag of flags.values()) {
       if (!flag.flag.visible) continue
-      if (flag.raising >= 0 && flag.raising < 1) {
-        flag.raising = Math.min(1, flag.raising + dt * 1.5)
-        flag.flag.scale.y = flag.raising
-      }
       const cloth = flag.flag.getObjectByName('cloth')
       if (cloth) cloth.rotation.y = Math.sin(time * 3) * 0.25
     }

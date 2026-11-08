@@ -131,7 +131,7 @@
 ## 技術選型
 
 - 前端：Nuxt 3、Vue 3、TypeScript
-- 地圖：Three.js（3D）；版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）、d3-voronoi-treemap（地區切割）、polygon-clipping
+- 地圖：Three.js（3D），鏡頭與升級演出的補間動畫用 GSAP；版面計算用 D3（d3-hierarchy、d3-polygon、d3-shape）、d3-voronoi-treemap（地區切割）、polygon-clipping
 - 裝置判斷與尺寸：VueUse（`useMediaQuery`、`useElementSize`）
 - 測試：Vitest（資料與邏輯）、Playwright（手機與桌面尺寸 E2E）
 - 部署：GitHub Actions、GitHub Pages

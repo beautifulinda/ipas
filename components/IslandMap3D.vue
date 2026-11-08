@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core'
 import { hierarchy } from 'd3-hierarchy'
+import gsap from 'gsap'
 import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { buildWorld, seededRandom, type BBox } from '~/utils/islandLayout'
@@ -113,16 +114,20 @@ let sun: THREE.DirectionalLight
 let ocean: THREE.Mesh
 let world: World3D | undefined
 let marker: THREE.Mesh
-let frame = 0
-let lastTime = 0
 const effects: Effect[] = []
 // 煙火爆開時照亮附近的閃光；固定一盞燈只調亮度，中途增減燈光會讓 three.js 重新編譯材質，手機上會卡一下
 let flashLight: THREE.PointLight
-let flashAge = Infinity
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-// 鏡頭飛行動畫
-let flight: { from: [THREE.Vector3, THREE.Vector3]; to: [THREE.Vector3, THREE.Vector3]; t: number } | undefined
+// 鏡頭動畫（飛到某處或升級特寫），同一時間只有一段；進行中不能拖曳地圖
+let cameraTween: gsap.core.Tween | undefined
+// 升級演出的時間軸：新的演出開始或地圖卸載時整段停掉，還沒放的特效不會再冒出來
+let celebration: gsap.core.Timeline | undefined
+
+function stopCamera() {
+  cameraTween?.kill()
+  cameraTween = undefined
+}
 
 function viewFor(box: BBox) {
   const w = Math.max(box[2] - box[0], 40)
@@ -152,24 +157,33 @@ function flyToFocus(animate: boolean) {
 }
 
 function flyTo(to: [THREE.Vector3, THREE.Vector3], animate: boolean) {
+  stopCamera()
   if (!animate || reduceMotion()) {
     camera.position.copy(to[0])
     controls.target.copy(to[1])
-    flight = undefined
     return
   }
-  flight = { from: [camera.position.clone(), controls.target.clone()], to, t: 0 }
+  const from = [camera.position.clone(), controls.target.clone()]
+  const progress = { t: 0 }
+  cameraTween = gsap.to(progress, {
+    t: 1,
+    duration: 0.8,
+    ease: 'power3.inOut',
+    onUpdate: () => {
+      camera.position.lerpVectors(from[0], to[0], progress.t)
+      controls.target.lerpVectors(from[1], to[1], progress.t)
+    },
+    onComplete: () => (cameraTween = undefined),
+  })
 }
 
 // 右上角的鏡頭按鈕：只移動鏡頭，不換主題，右側面板與作答狀態都保留
 function viewAll() {
   if (!renderer || !world) return
-  showcase = undefined
   flyTo(viewFor(world.bounds.get('root')!), true)
 }
 
 function viewCurrent() {
-  showcase = undefined
   flyToFocus(true)
 }
 
@@ -354,25 +368,13 @@ function animateOcean(time: number) {
   position.needsUpdate = true
 }
 
-function loop(now: number) {
-  frame = requestAnimationFrame(loop)
+// 每格畫面：GSAP 的 ticker 先更新所有補間動畫，再呼叫這裡繪圖，整張地圖只有一個時鐘
+function tick(_time: number, deltaMs: number) {
   if (!renderer || !world) return
-  const time = now / 1000
-  const dt = Math.min(0.05, lastTime ? time - lastTime : 0)
-  lastTime = time
-
-  if (flight) {
-    flight.t = Math.min(1, flight.t + dt / 0.8)
-    const t = flight.t < 0.5 ? 4 * flight.t ** 3 : 1 - (-2 * flight.t + 2) ** 3 / 2
-    camera.position.lerpVectors(flight.from[0], flight.to[0], t)
-    controls.target.lerpVectors(flight.from[1], flight.to[1], t)
-    if (flight.t >= 1) flight = undefined
-  }
-  if (showcase) animateShowcase(dt)
-  controls.enabled = !flight && !showcase
+  const time = gsap.ticker.time
+  const dt = Math.min(0.05, deltaMs / 1000)
+  controls.enabled = !cameraTween
   controls.update()
-  flashAge += dt
-  flashLight.intensity = Math.max(0, 1 - flashAge / 0.35) * 9000
 
   animateOcean(time)
   world.animate(time, dt, !reduceMotion())
@@ -388,34 +390,38 @@ function loop(now: number) {
 }
 
 // 鏡頭特寫：靠近目標、繞半圈，再回到原本的位置
-let showcase: { t: number; from: [THREE.Vector3, THREE.Vector3]; center: THREE.Vector3 } | undefined
 const SHOWCASE_SECONDS = 3.2
 
-function animateShowcase(dt: number) {
-  const s = showcase!
-  s.t = Math.min(1, s.t + dt / SHOWCASE_SECONDS)
-  const [fromPosition, fromTarget] = s.from
-  const near = Math.sin(s.t * Math.PI)
-  const offset = fromPosition.clone().sub(s.center)
+function showcaseAround(center: THREE.Vector3) {
+  const fromPosition = camera.position.clone()
+  const fromTarget = controls.target.clone()
+  const offset = fromPosition.clone().sub(center)
   const startAngle = Math.atan2(offset.x, offset.z)
   const radius = Math.hypot(offset.x, offset.z)
-  const angle = startAngle + Math.sin(s.t * Math.PI) * Math.PI * 0.35
-  const r = radius + (110 - radius) * near
-  const y = fromPosition.y + (s.center.y + 80 - fromPosition.y) * near
-  camera.position.set(s.center.x + Math.sin(angle) * r, y, s.center.z + Math.cos(angle) * r)
-  controls.target.lerpVectors(fromTarget, s.center, near)
-  if (s.t >= 1) {
-    camera.position.copy(fromPosition)
-    controls.target.copy(fromTarget)
-    showcase = undefined
-  }
+  const progress = { t: 0 }
+  return gsap.to(progress, {
+    t: 1,
+    duration: SHOWCASE_SECONDS,
+    ease: 'none',
+    onUpdate: () => {
+      const near = Math.sin(progress.t * Math.PI)
+      const angle = startAngle + near * Math.PI * 0.35
+      const r = radius + (110 - radius) * near
+      const y = fromPosition.y + (center.y + 80 - fromPosition.y) * near
+      camera.position.set(center.x + Math.sin(angle) * r, y, center.z + Math.cos(angle) * r)
+      controls.target.lerpVectors(fromTarget, center, near)
+    },
+    onComplete: () => {
+      camera.position.copy(fromPosition)
+      controls.target.copy(fromTarget)
+      cameraTween = undefined
+    },
+  })
 }
 
-function addEffect(effect: Effect, delay = 0) {
-  setTimeout(() => {
-    scene.add(effect.object)
-    effects.push(effect)
-  }, delay * 1000)
+function addEffect(effect: Effect) {
+  scene.add(effect.object)
+  effects.push(effect)
 }
 
 // 升級演出：依 celebrationFor 的計畫放星星、煙火、光柱，必要時鏡頭靠近；減少動態效果時計畫裡這些都是 0
@@ -434,20 +440,26 @@ function celebrate(plan: CelebrationPlan) {
     ? base.clone().add(new THREE.Vector3(0, Math.max(14, world.townHeight(milestone.id) + 4), 0))
     : base.clone().add(new THREE.Vector3(0, milestone.kind === 'flag' ? 28 : 38, 0))
 
-  if (plan.stars) addEffect(makeStarBurst(top, random, plan.stars), 0.5)
-  if (plan.pillar) addEffect(makeLightPillar(base), 0.3)
-  const shots = plan.fireworks === 1 ? [[0, 8, 0, 0.7]] : plan.fireworks >= 3 ? [[0, 6, 0, 0.45], [-14, 12, 6, 0.9], [14, 8, -6, 1.3]] : []
-  for (const [dx, dy, dz, delay] of shots) {
-    const origin = top.clone().add(new THREE.Vector3(dx, dy, dz))
-    addEffect(makeFireworks(origin, random), delay)
-    setTimeout(() => {
-      flashLight.position.copy(origin)
-      flashAge = 0
-    }, delay * 1000)
-  }
+  // 時間軸上的數字是演出開始後第幾秒
+  celebration?.kill()
+  const timeline = gsap.timeline({ onComplete: () => (celebration = undefined) })
+  celebration = timeline
   if (plan.camera) {
-    flight = undefined
-    showcase = { t: 0, from: [camera.position.clone(), controls.target.clone()], center: base.clone().add(new THREE.Vector3(0, 12, 0)) }
+    stopCamera()
+    cameraTween = showcaseAround(base.clone().add(new THREE.Vector3(0, 12, 0)))
+    timeline.add(cameraTween, 0)
+  }
+  if (plan.pillar) timeline.call(() => addEffect(makeLightPillar(base)), [], 0.3)
+  if (plan.stars) timeline.call(() => addEffect(makeStarBurst(top, random, plan.stars)), [], 0.5)
+  const shots = plan.fireworks === 1 ? [[0, 8, 0, 0.7]] : plan.fireworks >= 3 ? [[0, 6, 0, 0.45], [-14, 12, 6, 0.9], [14, 8, -6, 1.3]] : []
+  for (const [dx, dy, dz, at] of shots) {
+    const origin = top.clone().add(new THREE.Vector3(dx, dy, dz))
+    timeline.call(() => {
+      addEffect(makeFireworks(origin, random))
+      flashLight.position.copy(origin)
+    }, [], at)
+    // 煙火爆開的閃光：0.35 秒內由亮到暗
+    timeline.fromTo(flashLight, { intensity: 9000 }, { intensity: 0, duration: 0.35, ease: 'none', immediateRender: false }, at)
   }
 }
 function focusMap() {
@@ -507,18 +519,19 @@ onMounted(() => {
   rebuildWorld()
   applyViewport()
   flyToFocus(false)
-  frame = requestAnimationFrame(loop)
+  gsap.ticker.add(tick)
 })
 
 onBeforeUnmount(() => {
-  cancelAnimationFrame(frame)
+  gsap.ticker.remove(tick)
+  celebration?.kill()
+  stopCamera()
   controls?.dispose()
   renderer?.dispose()
 })
 
 watch(focusNode, () => {
-  // 使用者換了位置，特寫中止
-  showcase = undefined
+  // 使用者換了位置，特寫中止（flyTo 會停掉目前的鏡頭動畫）
   flyToFocus(true)
 })
 watch(answeringHere, () => flyToFocus(true))
