@@ -14,6 +14,8 @@ import { buildWorld3D, type World3D } from '~/utils/scene/world3d'
 // insetBottom：畫面底部被其他元素（手機的 bottom sheet）擋住的高度，聚焦時改對準上方可見範圍
 // startId：建議從這裡開始的城鎮，標籤上方顯示「從這裡開始」
 // nextId：目前的主題全部作答過時，建議的下一站；目前這棟建築上方顯示「下一站」，取代「作答中」與「從這裡開始」
+// dimIds：選了考卷時這份沒有考到的主題，標籤變淡（需求在 tests/features/梯次入口.feature）
+// context：目前的考卷「目前：115 年第三次 第二科」，焦點回到地圖時報讀軟體一起唸出
 // answering：正在作答目前這個主題（鍵盤在右邊的題目上），questionNumber 是第幾題；地圖放大到建築物並顯示提示
 const props = withDefaults(
   defineProps<{
@@ -24,8 +26,18 @@ const props = withDefaults(
     insetBottom?: number
     answering?: boolean
     questionNumber?: number
+    dimIds?: Set<string>
+    context?: string
   }>(),
-  { startId: undefined, nextId: undefined, insetBottom: 0, answering: false, questionNumber: 1 },
+  {
+    startId: undefined,
+    nextId: undefined,
+    insetBottom: 0,
+    answering: false,
+    questionNumber: 1,
+    dimIds: undefined,
+    context: undefined,
+  },
 )
 const focusId = defineModel<string>('focusId', { required: true })
 // start：點了「從這裡開始」或「下一站」，要直接開始練習那個主題
@@ -62,6 +74,7 @@ interface Label {
   text: string
   // 城鎮的答對、答錯比例（0～1），畫成進度圓餅；tally 只在目前選到的城鎮顯示
   progress?: { correct: number; wrong: number; text: string; tally?: string }
+  dim?: boolean
 }
 // 作答中只顯示「作答中」的提示，不顯示「從這裡開始」
 const answeringHere = computed(() => props.answering && focusNode.value.depth === 3)
@@ -86,6 +99,7 @@ const labels = computed<Label[]>(() => [
         anchor: t.id,
         kind: 'town' as const,
         text: t.data.title,
+        dim: props.dimIds?.has(t.id),
         progress: progress && {
           correct: progress.correct / progress.total,
           wrong: progress.wrong / progress.total,
@@ -101,7 +115,7 @@ const navTargets = computed(() => focusNode.value.children?.map((c) => c.data) ?
 const startTitle = computed(() => layout.value.towns.find((t) => t.id === props.startId)?.data.title)
 // 按 Esc 回到地圖時焦點移到地圖上，報讀軟體會唸出目前的位置
 const mapLabel = computed(
-  () => `主題地圖（3D 島嶼），目前在「${focusNode.value.data.title}」。可用下方的導覽按鈕、方向鍵、Enter 與 Esc 操作，或切換到清單模式。`,
+  () => `${props.context ? `${props.context}。` : ''}主題地圖（3D 島嶼），目前在「${focusNode.value.data.title}」。可用下方的導覽按鈕、方向鍵、Enter 與 Esc 操作，或切換到清單模式。`,
 )
 // 給 E2E 檢查鏡頭對準哪裡：town:主題ID 表示放大到建築物
 const viewKey = computed(() => (answeringHere.value ? `town:${focusId.value}` : focusId.value))
@@ -574,7 +588,7 @@ watch(
         v-for="label in labels"
         :key="label.key"
         class="tag"
-        :class="`tag--${label.kind}`"
+        :class="[`tag--${label.kind}`, { 'tag--dim': label.dim }]"
         :data-key="label.key"
         :data-anchor="label.anchor"
         :data-kind="label.kind"
@@ -672,6 +686,15 @@ watch(
   gap: 0.35rem;
   align-items: center;
   font-size: 13px;
+}
+
+/* 這份考卷沒有考到的主題：變淡，但還看得到、點得到 */
+.tag--dim {
+  border-color: #9a94a0;
+  background: rgba(255, 253, 244, 0.7);
+  box-shadow: none;
+  color: #6b6470;
+  font-weight: 600;
 }
 
 /* 進度圓餅：綠色是答對、紅色斜線是答錯、灰色是還沒作答；

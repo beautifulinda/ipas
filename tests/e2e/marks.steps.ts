@@ -8,7 +8,8 @@ const { Given, When, Then } = createBdd()
 // 需求背景的主題要和假題庫一致
 Given(/^主題「(.+)」有第 1 題和第 2 題$/, async ({ page }, title: string) => {
   expect(conceptByTitle(title).questions).toHaveLength(2)
-  await page.goto('./')
+  // 網址沒有參數會先看到梯次入口，這裡要直接看地圖
+  await page.goto('./?paper=all')
 })
 
 // 手機要先開全螢幕作答才看得到題目，標記完再關掉

@@ -1,10 +1,13 @@
 import type { Ref } from 'vue'
 import { findPath, type MapNode } from '~/utils/mapTree'
+import { ALL_PAPERS } from '~/utils/paperEntry'
 
 // 把地圖的位置同步到網址（?at=節點ID）與瀏覽器歷史紀錄：
 // - 手機的返回手勢（iPhone 從左緣右滑、Android 返回鍵）與瀏覽器上一頁，都會回到前一個位置
 // - 網址可以直接分享，重新整理後回到同一個位置
 // - 同層切換（方向鍵）只取代目前這筆，不會塞滿歷史紀錄
+// - 選了考卷（?paper=，見 utils/paperEntry.ts）時換位置會保留考卷；只有舊的 ?at= 連結時補上 paper=all，
+//   否則回到最上層時網址沒有參數，會跳回梯次入口
 // 用 vue-router 而不直接操作 history：Nuxt 的路由也會監聽上一頁事件，繞過它會讓網址錯亂
 export function useFocusHistory(focusId: Ref<string>, tree: MapNode) {
   const route = useRoute()
@@ -21,7 +24,10 @@ export function useFocusHistory(focusId: Ref<string>, tree: MapNode) {
     const at = route.query.at
     return typeof at === 'string' && isValid(at) ? at : tree.id
   }
-  const queryFor = (id: string) => (id === tree.id ? {} : { at: id })
+  const queryFor = (id: string) => {
+    const paper = typeof route.query.paper === 'string' ? { paper: route.query.paper } : {}
+    return id === tree.id ? paper : { ...paper, at: id }
+  }
 
   function setFocus(id: string) {
     if (focusId.value === id) return
@@ -34,7 +40,16 @@ export function useFocusHistory(focusId: Ref<string>, tree: MapNode) {
     setFocus(idFromRoute())
     stack.splice(0, stack.length, idFromRoute())
     pointer = 0
+    keepPaper()
   })
+
+  // 只有 ?at= 的舊連結補上 paper=all；hydration 時路由還是靜態 HTML 的網址，所以等網址參數出現時再補
+  function keepPaper() {
+    if (typeof route.query.at === 'string' && route.query.paper === undefined) {
+      router.replace({ query: { ...route.query, paper: ALL_PAPERS } })
+    }
+  }
+  watch(() => [route.query.at, route.query.paper], keepPaper)
 
   // 上一頁、下一頁或手動改網址
   watch(

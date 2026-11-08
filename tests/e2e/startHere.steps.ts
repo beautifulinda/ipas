@@ -9,7 +9,8 @@ const { Given, When, Then } = createBdd()
 Given('地圖上依官方順序有三個主題：', async ({ page }, table: DataTable) => {
   const rows = table.hashes() as { 主題: string; 題數: string }[]
   expect(concepts.map((c) => ({ 主題: c.title, 題數: String(c.questions.length) }))).toEqual(rows)
-  await page.goto('./')
+  // 網址沒有參數會先看到梯次入口，這裡要直接看地圖
+  await page.goto('./?paper=all')
 })
 
 When('我點地圖上的「從這裡開始」', async ({ page }) => {

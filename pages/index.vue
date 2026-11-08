@@ -5,10 +5,25 @@ import type { TopicMap } from '~/types/map'
 import mapData from '#map-data'
 import { findConcept, practiceQuestions } from '~/utils/concepts'
 import { COPYRIGHT_NOTICE, mergePastPapers } from '~/utils/pastPapers'
-import type { ExamOutcome, ExamPaper } from '~/utils/mockExam'
+import { examPapers, type ExamOutcome, type ExamPaper } from '~/utils/mockExam'
 import { withExtraQuestions, type ExtraQuestion } from '~/utils/questionBank'
 import type { MapControls } from '~/composables/useMapKeyboard'
 import { ROOT_ID, findPath, toMapTree } from '~/utils/mapTree'
+import { entryEnter, entryLeave } from '~/utils/entryTransition'
+import {
+  ALL_PAPERS,
+  BACK_TO_ENTRY,
+  SHOW_ALL_PAPERS,
+  currentPaperText,
+  entryRows,
+  filterMapByPaper,
+  notInPaperText,
+  paperParam,
+  paperProgression,
+  paperSubject,
+  parsePaperParam,
+  type PaperChoice,
+} from '~/utils/paperEntry'
 import {
   PLAQUE_RIBBON,
   celebrationFor,
@@ -34,10 +49,31 @@ const pastPapers = mergePastPapers(Object.values(privateBanks).flatMap((bank) =>
 const map = withExtraQuestions(mapData as TopicMap, pastPapers)
 const tree = toMapTree(map)
 
+// 梯次入口（需求在 tests/features/梯次入口.feature）：網址沒有參數時先列出每一次考試；
+// ?paper=115-S3-2 是只練這一份考卷，?paper=all 是全部梯次；只有舊連結的 ?at= 時直接進地圖（掛載後補上 paper=all）
+// 用 router.currentRoute 而不是 useRoute()：hydration 剛完成時 useRoute() 還是靜態 HTML 的網址（沒有參數），
+// 舊連結會先閃一下入口
+const router = useRouter()
+const query = computed(() => router.currentRoute.value.query)
+// 靜態 HTML 沒有網址參數，掛載前一律畫入口，hydration 才會一致；掛載後才看網址
+const mounted = ref(false)
+const entryShown = computed(() => !mounted.value || (query.value.paper === undefined && query.value.at === undefined))
+// 網址指定的考卷；題庫裡沒有這一份（例如下架）時當作全部梯次
+const paper = computed<PaperChoice | undefined>(() => {
+  const choice = parsePaperParam(query.value.paper)
+  return choice && examPapers(map).some((p) => p.session === choice.session && p.paper === choice.paper) ? choice : undefined
+})
+// 地圖、面板、清單用的題庫：選了考卷時只留這一份的題目（主題都保留，版面不變）
+const viewMap = computed(() => (paper.value ? filterMapByPaper(map, paper.value) : map))
+
 const focusId = ref(ROOT_ID)
 const path = computed(() => findPath(tree, focusId.value))
 // 聚焦到主題概念（城鎮）時打開概念面板
-const concept = computed(() => findConcept(map, focusId.value))
+const concept = computed(() => findConcept(viewMap.value, focusId.value))
+// 這份考卷沒有考這個主題時，面板顯示說明與「看全部梯次的題目」
+const notInPaper = computed(() =>
+  paper.value && concept.value && !practiceQuestions(concept.value).length ? notInPaperText(paper.value) : undefined,
+)
 
 const { isMobile } = useDevice()
 const { attempts, ready, record, recordExam } = useRecords()
@@ -72,15 +108,78 @@ watch(concept, () => {
 const exam = ref<{ paper: ExamPaper; timed: boolean }>()
 const practiceShown = computed(() => Boolean(concept.value && isMobile.value && quizOpen.value))
 const quizShown = computed(() => practiceShown.value || Boolean(exam.value))
+// 入口或全螢幕作答蓋在上面時，背後的頁首、地圖、頁尾都設 inert
+const backgroundInert = computed(() => quizShown.value || entryShown.value)
 
-// 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出
+// 熟練度：城鎮等級、雲霧、旗子、燈塔都由作答紀錄算出（一律算全部題目，升級演出也看這個）
 const progression = computed(() => computeProgression(map, attempts.value))
+// 地圖用的熟練度：選了考卷時進度圓餅、題數、有沒有練習過只算這一份，等級照全部題目
+const viewProgression = computed(() =>
+  paper.value ? paperProgression(progression.value, viewMap.value, attempts.value) : progression.value,
+)
+// 這份考卷沒有考到的主題，地圖上的標籤變淡
+const dimIds = computed(() => {
+  if (!paper.value) return undefined
+  const ids = new Set<string>()
+  for (const subject of viewMap.value.subjects)
+    for (const category of subject.categories)
+      for (const c of category.concepts) if (!practiceQuestions(c).length) ids.add(c.id)
+  return ids
+})
 // 建議從哪裡開始；等紀錄載入完成才顯示，避免老使用者一打開先看到標記又消失
-const startId = computed(() => (ready.value ? recommendedStart(map, progression.value) : undefined))
+const startId = computed(() => (ready.value ? recommendedStart(viewMap.value, viewProgression.value) : undefined))
 // 目前的主題全部作答過時，建議的下一站（需求在 tests/features/下一站.feature）
 const nextId = computed(() =>
-  ready.value && concept.value ? nextStop(map, progression.value, concept.value.id) : undefined,
+  ready.value && concept.value ? nextStop(viewMap.value, viewProgression.value, concept.value.id) : undefined,
 )
+
+const rows = computed(() => entryRows(map, attempts.value))
+const entryRef = ref<{ focusFirst: () => void }>()
+// 第一次掛載時網址已經指定位置（舊連結、重新整理）：入口直接消失，不播轉場
+let entryInstant = true
+onMounted(async () => {
+  mounted.value = true
+  await nextTick()
+  entryInstant = false
+})
+// 選到的考卷（轉場時放大那一張）
+let picked: string | undefined
+
+function choosePaper(choice: PaperChoice) {
+  picked = paperParam(choice)
+  router.push({ query: { paper: picked, at: paperSubject(choice) } })
+}
+
+function chooseAll() {
+  picked = undefined
+  router.push({ query: { paper: ALL_PAPERS } })
+}
+
+// 地圖上方的「看全部梯次」、面板的「看全部梯次的題目」：停在同一個位置，只換題庫
+function showAllPapers() {
+  router.replace({ query: { ...query.value, paper: ALL_PAPERS } })
+}
+
+function backToEntry() {
+  router.push({ query: {} })
+}
+
+function onEntryEnter(el: Element, done: () => void) {
+  entryEnter(el, () => {
+    done()
+    entryRef.value?.focusFirst()
+  })
+}
+
+// 入口離開後焦點移到地圖，報讀軟體唸出目前的考卷與位置
+function onEntryLeave(el: Element, done: () => void) {
+  const finish = () => {
+    done()
+    if (!entryInstant) nextTick(() => mapRef.value?.focus())
+  }
+  if (entryInstant) finish()
+  else entryLeave(el, picked, finish)
+}
 // 地圖對外提供的操作（IslandMap3D 的 defineExpose）
 const mapRef = ref<MapControls & { celebrate: (plan: CelebrationPlan) => void; focus: () => void }>()
 const panelRef = ref<{ focusQuestion: () => Promise<void> }>()
@@ -213,6 +312,7 @@ const { usingKeyboard } = useMapKeyboard({
   answering,
   enter: onEnter,
   leave: onLeave,
+  paused: entryShown,
 })
 const showKeyboardHint = computed(() => usingKeyboard.value && !isMobile.value && view.value === 'map')
 
@@ -233,7 +333,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
 <template>
   <div class="layout" :class="{ mobile: isMobile }">
-    <header class="header" :inert="quizShown">
+    <header class="header" :inert="backgroundInert">
       <div class="title-row">
         <h1>iPAS AI 應用規劃師（初級）主題地圖</h1>
         <div class="tools">
@@ -251,17 +351,24 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           <a :href="map.scopeSource.url" target="_blank" rel="noopener">〈{{ map.scopeSource.title }}〉</a>。
         </template>
       </p>
+      <div class="paper-bar">
+        <span v-if="paper" class="paper-current">{{ currentPaperText(paper) }}</span>
+        <button v-if="paper" type="button" @click="showAllPapers">{{ SHOW_ALL_PAPERS }}</button>
+        <button type="button" @click="backToEntry">{{ BACK_TO_ENTRY }}</button>
+      </div>
       <MapBreadcrumb :path="path" @navigate="focusId = $event" />
     </header>
 
-    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile, answering: answering && !isMobile }" :inert="quizShown">
+    <main ref="mainEl" class="main" :class="{ 'has-panel': concept && !isMobile, answering: answering && !isMobile }" :inert="backgroundInert">
       <div class="map-area">
         <IslandMap3D
           v-if="view === 'map'"
           ref="mapRef"
           v-model:focus-id="focusId"
           :tree="tree"
-          :progression="progression"
+          :progression="viewProgression"
+          :dim-ids="dimIds"
+          :context="paper && currentPaperText(paper)"
           :start-id="startId"
           :next-id="nextId"
           :answering="answering && !isMobile"
@@ -271,7 +378,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           :inset-bottom="insetBottom"
           @unsupported="view = 'list'"
         />
-        <ListView v-else :map="map" :focus-id="focusId" :attempts="attempts" @navigate="focusId = $event" />
+        <ListView v-else :map="viewMap" :focus-id="focusId" :attempts="attempts" @navigate="focusId = $event" />
         <KeyboardHint v-if="showKeyboardHint" :answering="answering" />
         <!-- 手機：左上角的返回按鈕（也可以用系統的返回手勢） -->
         <button
@@ -290,8 +397,10 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           v-if="isMobile"
           :concept="concept"
           :attempts="attempts"
+          :not-in-paper="notInPaper"
           @close="goUp"
           @start-quiz="quizOpen = true"
+          @show-all="showAllPapers"
         />
         <ConceptPanel
           v-else
@@ -300,13 +409,19 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
           ref="panelRef"
           :start-question="reviewQuestion"
           :attempts="attempts"
+          :not-in-paper="notInPaper"
           @close="goUp"
+          @show-all="showAllPapers"
           @answered="onAnswered"
           @engage="answering = true"
           @position="questionNumber = $event"
         />
       </template>
     </main>
+
+    <Transition :css="false" @enter="onEntryEnter" @leave="onEntryLeave">
+      <PaperEntry v-if="entryShown" ref="entryRef" :rows="rows" :ready="ready" @choose="choosePaper" @all="chooseAll" />
+    </Transition>
 
     <QuizScreen
       v-if="concept && practiceShown"
@@ -350,7 +465,7 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 
     <ConfettiBurst ref="confettiRef" />
 
-    <footer class="hint" :inert="quizShown">
+    <footer class="hint" :inert="backgroundInert">
       <template v-if="isMobile">點擊放大・雙指縮放・拖曳平移・左上角按鈕或返回手勢回上一層</template>
       <template v-else>點擊節點放大・滾輪縮放・拖曳平移・方向鍵切換同層・Enter 作答・Esc 返回</template>
       <span v-if="pastPapers.length" class="copyright">{{ COPYRIGHT_NOTICE }}。</span>
@@ -427,6 +542,35 @@ body {
 
 .disclaimer a {
   color: inherit;
+}
+
+/* 目前的考卷與切換：「目前：115 年第三次 第二科」「看全部梯次」「回梯次列表」 */
+.paper-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.paper-current {
+  padding: 0.1rem 0.7rem;
+  border: 2px solid #2b2633;
+  border-radius: 999px;
+  background: #fff3e6;
+  font-weight: 800;
+}
+
+.paper-bar button {
+  min-height: 36px;
+  padding: 0 0.8rem;
+  border: 2px solid #2b2633;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .main {
@@ -548,6 +692,25 @@ body {
 .mobile .tools {
   flex: 1 1 100%;
   justify-content: space-between;
+}
+
+/* 手機：考卷列縮小擠成一行，留空間給地圖 */
+.mobile .paper-bar {
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  margin-bottom: 0.2rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.mobile .paper-current {
+  padding: 0 0.5rem;
+}
+
+.mobile .paper-bar button {
+  min-height: 32px;
+  padding: 0 0.55rem;
+  font-size: 0.78rem;
 }
 
 .mobile .header h1 {

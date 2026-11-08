@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { Concept } from '~/types/map'
 import type { Attempt } from '~/utils/progress'
+import { SHOW_ALL_QUESTIONS } from '~/utils/paperEntry'
 
 // 桌面版：右側面板，地圖保持可見
-defineProps<{ concept: Concept; attempts: readonly Attempt[]; startQuestion?: string }>()
+// notInPaper：選了考卷、這份沒有考這個主題時的說明（「115 年第三次 第二科沒有考這個主題」），取代練習題
+defineProps<{ concept: Concept; attempts: readonly Attempt[]; startQuestion?: string; notInPaper?: string }>()
 const emit = defineEmits<{
   close: []
+  'show-all': []
   answered: [questionId: string, choice: string, correct: boolean]
   engage: []
   position: [n: number]
@@ -25,8 +28,14 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
       <h2 id="concept-title" tabindex="-1">{{ concept.title }}</h2>
       <button type="button" class="close" aria-label="關閉" @click="emit('close')">✕</button>
     </header>
+    <!-- 放在摘要前面，打開面板就看得到 -->
+    <div v-if="notInPaper" class="not-in-paper">
+      <p>{{ notInPaper }}</p>
+      <button type="button" @click="emit('show-all')">{{ SHOW_ALL_QUESTIONS }}</button>
+    </div>
     <ConceptSummary :concept="concept" />
     <PracticeSection
+      v-if="!notInPaper"
       ref="practice"
       :concept="concept"
       :attempts="attempts"
@@ -39,6 +48,27 @@ function onAnswered(questionId: string, choice: string, correct: boolean) {
 </template>
 
 <style scoped>
+.not-in-paper {
+  padding: 0.9rem 1rem;
+  border: 2px dashed #2b2633;
+  border-radius: 14px;
+}
+
+.not-in-paper p {
+  margin: 0 0 0.6rem;
+}
+
+.not-in-paper button {
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 2px solid #2b2633;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .panel {
   display: flex;
   flex-direction: column;

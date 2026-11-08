@@ -13,16 +13,18 @@ interface Options {
   answering: Ref<boolean>
   enter: () => void
   leave: () => void
+  // 梯次入口蓋在地圖上時，按鍵留給入口（Tab、Enter 選考卷），地圖不處理
+  paused?: Ref<boolean>
 }
 
-export function useMapKeyboard({ map, atConcept, answering, enter, leave }: Options) {
+export function useMapKeyboard({ map, atConcept, answering, enter, leave, paused }: Options) {
   // 最近一次是用鍵盤操作；改用滑鼠或觸控就變回 false，鍵盤提示框只在用鍵盤時顯示
   const usingKeyboard = ref(false)
 
   function onKeydown(event: KeyboardEvent) {
     usingKeyboard.value = true
     // 題目已經處理過的按鍵（換選項、換題）不再處理；換題時舊的選項可能已經從畫面移除，認不出它原本在面板裡
-    if (event.defaultPrevented || !map.value) return
+    if (event.defaultPrevented || !map.value || paused?.value) return
     const target = event.target instanceof Element ? event.target : undefined
     const typing = target?.closest('input, textarea, select, [contenteditable="true"]')
     const inPanel = target?.closest('[data-no-map-keys]')

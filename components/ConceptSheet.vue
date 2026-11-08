@@ -2,10 +2,12 @@
 import type { Concept } from '~/types/map'
 import { practiceQuestions } from '~/utils/concepts'
 import { latestByQuestion, type Attempt } from '~/utils/progress'
+import { SHOW_ALL_QUESTIONS } from '~/utils/paperEntry'
 
 // 手機版：從底部滑出的面板。預設佔下半部，拖曳把手往上展開、往下收起或關閉
-const props = defineProps<{ concept: Concept; attempts: readonly Attempt[] }>()
-const emit = defineEmits<{ close: []; 'start-quiz': [] }>()
+// notInPaper：選了考卷、這份沒有考這個主題時的說明，取代「這個主題還沒有練習題」
+const props = defineProps<{ concept: Concept; attempts: readonly Attempt[]; notInPaper?: string }>()
+const emit = defineEmits<{ close: []; 'start-quiz': []; 'show-all': [] }>()
 
 const expanded = ref(false)
 const dragY = ref(0)
@@ -79,8 +81,10 @@ function onPointerUp() {
       <!-- 練習入口放在最前面，面板半開時也看得到 -->
       <div class="practice-entry">
         <p v-if="questions.length">練習題 {{ questions.length }} 題，已答對 {{ correctCount }} 題</p>
+        <p v-else-if="notInPaper">{{ notInPaper }}</p>
         <p v-else>這個主題還沒有練習題。</p>
         <button v-if="questions.length" type="button" class="start" @click="emit('start-quiz')">開始練習</button>
+        <button v-else-if="notInPaper" type="button" class="start" @click="emit('show-all')">{{ SHOW_ALL_QUESTIONS }}</button>
       </div>
       <ConceptSummary :concept="concept" />
       <button type="button" class="toggle" @click="expanded = !expanded">
