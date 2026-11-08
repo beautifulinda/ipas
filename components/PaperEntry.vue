@@ -50,16 +50,22 @@ defineExpose({ focusFirst })
                 :aria-label="cellLabel(cell)"
                 @click="emit('choose', { session: cell.paper.session, paper: cell.paper.paper })"
               >
-                <span class="paper-name">{{ paperName(i + 1) }}</span>
-                <span class="status">{{ props.ready ? cellText(cell) : '　' }}</span>
+                <span class="text">
+                  <span class="paper-name">{{ paperName(i + 1) }}</span>
+                  <span class="status">{{ props.ready ? cellText(cell) : '　' }}</span>
+                </span>
+                <span class="art"><PaperArt :paper="i === 0 ? 1 : 2" /></span>
                 <span v-if="props.ready && cell.answered" class="bar" aria-hidden="true">
                   <span class="bar-correct" :style="{ width: `${(cell.correct / cell.total) * 100}%` }" />
                   <span class="bar-wrong" :style="{ width: `${((cell.answered - cell.correct) / cell.total) * 100}%` }" />
                 </span>
               </button>
               <button v-else type="button" class="cell cell--missing" disabled>
-                <span class="paper-name">{{ paperName(i + 1) }}</span>
-                <span class="status">{{ PAPER_MISSING }}</span>
+                <span class="text">
+                  <span class="paper-name">{{ paperName(i + 1) }}</span>
+                  <span class="status">{{ PAPER_MISSING }}</span>
+                </span>
+                <span class="art"><PaperArt :paper="i === 0 ? 1 : 2" /></span>
               </button>
             </template>
           </div>
@@ -120,11 +126,12 @@ defineExpose({ focusFirst })
   gap: 0.75rem;
 }
 
+/* 文字在左、科目插畫在右，進度條橫跨整格 */
 .cell {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.6rem;
+  align-items: center;
   min-height: 88px;
   padding: 0.75rem 0.9rem;
   border: 3px solid #2b2633;
@@ -151,6 +158,44 @@ defineExpose({ focusFirst })
   box-shadow: 0 6px 0 #2b2633;
 }
 
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* 插畫框固定大小，滑鼠移過去（或鍵盤移到）時圖在框裡放大 */
+.art {
+  display: block;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border: 2px solid #2b2633;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.cell--1 .art {
+  background: #dcebff;
+}
+
+.cell--2 .art {
+  background: #ffe6c7;
+}
+
+.paper-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.cell:hover:not(:disabled) .paper-art,
+.cell:focus-visible .paper-art {
+  transform: scale(1.25) rotate(-3deg);
+}
+
 .cell:active:not(:disabled) {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #2b2633;
@@ -170,6 +215,12 @@ defineExpose({ focusFirst })
   cursor: not-allowed;
 }
 
+.cell--missing .art {
+  background: #ece8df;
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
 .paper-name {
   font-size: 1.15rem;
   font-weight: 800;
@@ -182,6 +233,7 @@ defineExpose({ focusFirst })
 /* 進度條：答對綠色、答錯紅色斜線（和地圖上的進度圓餅一致，紅綠色弱也分得出來） */
 .bar {
   display: flex;
+  grid-column: 1 / -1;
   width: 100%;
   height: 8px;
   margin-top: 0.3rem;
@@ -231,6 +283,23 @@ defineExpose({ focusFirst })
 
   .status {
     font-size: 0.8rem;
+  }
+
+  .art {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-art {
+    transition: none;
+  }
+
+  .cell:hover:not(:disabled) .paper-art,
+  .cell:focus-visible .paper-art {
+    transform: none;
   }
 }
 </style>
